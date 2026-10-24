@@ -3,7 +3,7 @@ import {
   BookOpen, Clock, FolderPlus, ThumbsUp, 
   Home, PlusCircle, BarChart2, ArrowLeft, Trash2, Calendar, Sparkles,
   MessageCircle, Send, Trophy, Medal, Flame, KeyRound, LogOut,
-  ImagePlus, X, HelpCircle, Edit // ← Editを追加
+  ImagePlus, X, HelpCircle, Edit
 } from 'lucide-react';
 import { db } from './firebase';
 import { 
@@ -177,7 +177,7 @@ export default function App() {
       )}
 
       <header className="bg-gradient-to-r from-amber-400 via-orange-400 to-rose-400 sticky top-0 z-30 shadow-lg p-4 flex justify-between items-center rounded-b-2xl">
-        <div className="flex items-center gap-2 cursor-pointer text-white" onClick={() => { setActiveTab('home'); setSelectedQuestionId(null); }}>
+        <div className="flex items-center gap-2 cursor-pointer text-white" onClick={() => { setActiveTab('home'); setSelectedQuestionId(null); setSelectedFolderId(null); }}>
           <div className="bg-white/20 p-2 rounded-xl backdrop-blur-sm"><BookOpen className="w-5 h-5 text-white" /></div>
           <h1 className="font-extrabold text-lg drop-shadow-md">YOSO</h1>
         </div>
@@ -194,7 +194,7 @@ export default function App() {
       </header>
 
       <main className="max-w-4xl mx-auto p-4 flex-1 w-full flex flex-col">
-        {activeTab === 'home' && !selectedQuestionId && (
+        {activeTab === 'home' && !selectedQuestionId && !selectedFolderId && (
           <div onClick={() => setShowProfileModal(true)} className="mb-6 cursor-pointer bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 p-5 rounded-3xl shadow-xl text-white relative overflow-hidden transform transition hover:scale-[1.02]">
             <div className="absolute top-0 right-0 p-4 opacity-20"><Calendar className="w-24 h-24" /></div>
             <div className="relative z-10">
@@ -227,13 +227,13 @@ export default function App() {
           />
         ) : (
           <>
-            {activeTab === 'home' && <HomeView folders={folders} questions={questions} onSelectQuestion={setSelectedQuestionId} onOpenFolderModal={() => setShowFolderModal(true)} onToggleLike={handleToggleLike} secretCode={userProfile.secretCode} />}
+            {activeTab === 'home' && <HomeView folders={folders} questions={questions} onSelectQuestion={setSelectedQuestionId} onOpenFolderModal={() => setShowFolderModal(true)} onToggleLike={handleToggleLike} secretCode={userProfile.secretCode} selectedFolderId={selectedFolderId} onSelectFolder={setSelectedFolderId} />}
             {activeTab === 'create' && <CreateQuestionView folders={folders} defaultFolderId={selectedFolderId || (folders[0]?.id || '')} userProfile={userProfile} onSuccess={() => { gainXP(50, 'totalPosts'); setActiveTab('home'); }} />}
             {activeTab === 'chat' && <ChatView userProfile={userProfile} onMessageSent={() => gainXP(10, 'totalChats')} />}
             {activeTab === 'timer' && <TimerView onSaveLog={handleSaveStudyLog} />}
             {activeTab === 'records' && (
               <div className="space-y-4">
-                <div className="flex justify-end"><button onClick={() => setShowManualLogModal(true)} className="bg-gradient-to-r from-amber-400 to-orange-400 text-white px-5 py-2.5 rounded-full shadow-md text-sm font-extrabold flex items-center gap-1.5"><PlusCircle className="w-4 h-4"/> 手動記録</button></div>
+                <div className="flex justify-end"><button onClick={() => setShowManualLogModal(true)} className="bg-gradient-to-r from-amber-400 to-orange-400 text-white px-5 py-2.5 rounded-full shadow-md text-sm font-extrabold flex items-center gap-1.5"><PlusCircle className="w-4 h-4"/> 手持記録</button></div>
                 <RecordsView studyLogs={studyLogs} onClearLogs={() => setStudyLogs([])} />
               </div>
             )}
@@ -539,7 +539,6 @@ function QuestionDetailView({ question, currentUid, onBack, onDelete, onUpdate, 
   const [showAnswers, setShowAnswers] = useState({});
   const [isEditing, setIsEditing] = useState(false);
   
-  // 編集用のステート
   const [editTitle, setEditTitle] = useState('');
   const [editSubject, setEditSubject] = useState('');
   const [editSubQuestions, setEditSubQuestions] = useState([]);
@@ -548,7 +547,6 @@ function QuestionDetailView({ question, currentUid, onBack, onDelete, onUpdate, 
     if (question && !isEditing) {
       setEditTitle(question.title);
       setEditSubject(question.subject);
-      // ディープコピーして編集用配列をセット
       setEditSubQuestions(JSON.parse(JSON.stringify(question.subQuestions || [])));
     }
   }, [question, isEditing]);
@@ -599,7 +597,6 @@ function QuestionDetailView({ question, currentUid, onBack, onDelete, onUpdate, 
       <div className="flex justify-between items-center mb-2">
         <button onClick={onBack} className="flex items-center gap-1 text-sm font-bold text-amber-700 bg-white px-3 py-1.5 rounded-full shadow-sm"><ArrowLeft className="w-4 h-4" /> 戻る</button>
         <div className="flex gap-2">
-          {/* 編集ボタンと削除ボタンを表示 */}
           <button onClick={() => setIsEditing(true)} className="flex items-center gap-1 text-xs font-bold text-stone-600 bg-white border px-3 py-1.5 rounded-full shadow-sm"><Edit className="w-3.5 h-3.5" /> 編集</button>
           <button onClick={() => onDelete(question.id)} className="flex items-center gap-1 text-xs font-bold text-rose-600 bg-white border px-3 py-1.5 rounded-full shadow-sm"><Trash2 className="w-3.5 h-3.5" /> 削除</button>
         </div>
@@ -636,32 +633,53 @@ function QuestionDetailView({ question, currentUid, onBack, onDelete, onUpdate, 
   );
 }
 
-function HomeView({ folders, questions, onSelectQuestion, onOpenFolderModal, onToggleLike, secretCode }) {
+function HomeView({ folders, questions, onSelectQuestion, onOpenFolderModal, onToggleLike, secretCode, selectedFolderId, onSelectFolder }) {
+  const displayQuestions = selectedFolderId ? questions.filter(q => q.folderId === selectedFolderId) : questions;
+  const selectedFolder = folders.find(f => f.id === selectedFolderId);
+
   return (
     <div className="space-y-8">
       <div className="bg-orange-100 border-2 border-orange-200 p-3 rounded-xl flex items-center justify-between text-sm font-extrabold text-orange-800">
         <div className="flex items-center gap-2"><KeyRound className="w-4 h-4"/> 参加中の合言葉: <span className="bg-white px-2 py-0.5 rounded-md">{secretCode}</span></div>
       </div>
-      <div>
-        <div className="flex justify-between items-center mb-4"><h2 className="text-lg font-extrabold text-stone-700 flex items-center gap-2"><FolderPlus className="w-5 h-5 text-amber-500" /> フォルダ</h2><button onClick={onOpenFolderModal} className="text-xs text-orange-700 font-extrabold bg-orange-100 px-4 py-2 rounded-full">＋ 作成</button></div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {folders.map(f => <div key={f.id} className="bg-white p-4 rounded-2xl border shadow-md cursor-pointer hover:-translate-y-1 transition"><FolderPlus className="w-8 h-8 text-amber-400 mb-2" /><h3 className="font-extrabold text-sm text-stone-700 truncate">{f.name}</h3></div>)}
-        </div>
-      </div>
-      <div>
-        <h2 className="text-lg font-extrabold text-stone-700 mb-4 flex items-center gap-2"><Sparkles className="w-5 h-5 text-orange-400" /> 予想問題</h2>
-        <div className="space-y-4">
-          {questions.map(q => (
-            <div key={q.id} onClick={() => onSelectQuestion(q.id)} className="bg-white p-5 rounded-3xl border shadow-md cursor-pointer">
-              <span className="text-[10px] font-extrabold bg-amber-100 text-amber-800 px-2.5 py-1 rounded-md">{q.subject}</span>
-              <h3 className="font-extrabold text-lg text-stone-800 mt-2">{q.title}</h3>
-              <div className="flex justify-between items-center text-xs border-t pt-3 mt-3">
-                <span className="font-bold text-stone-400">作成: {q.author}</span>
-                <button onClick={(e) => { e.stopPropagation(); onToggleLike(q.id); }} className={`flex items-center gap-1.5 font-extrabold px-3 py-1.5 rounded-full ${q.likedByMe ? 'bg-rose-100 text-rose-600' : 'bg-stone-50 text-stone-500'}`}><ThumbsUp className="w-4 h-4" /> {q.likes || 0}</button>
+      
+      {!selectedFolderId ? (
+        <div>
+          <div className="flex justify-between items-center mb-4"><h2 className="text-lg font-extrabold text-stone-700 flex items-center gap-2"><FolderPlus className="w-5 h-5 text-amber-500" /> フォルダ</h2><button onClick={onOpenFolderModal} className="text-xs text-orange-700 font-extrabold bg-orange-100 px-4 py-2 rounded-full">＋ 作成</button></div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {folders.map(f => (
+              <div key={f.id} onClick={() => onSelectFolder(f.id)} className="bg-white p-4 rounded-2xl border shadow-md cursor-pointer hover:-translate-y-1 transition">
+                <FolderPlus className="w-8 h-8 text-amber-400 mb-2" />
+                <h3 className="font-extrabold text-sm text-stone-700 truncate">{f.name}</h3>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
+      ) : (
+        <div className="flex items-center gap-3 bg-white p-4 rounded-2xl border shadow-sm">
+           <button onClick={() => onSelectFolder(null)} className="flex items-center gap-1 text-sm font-bold text-stone-600 bg-stone-100 px-3 py-1.5 rounded-full hover:bg-stone-200 transition"><ArrowLeft className="w-4 h-4" /> 戻る</button>
+           <h2 className="text-lg font-extrabold text-stone-800 flex items-center gap-2"><FolderPlus className="w-5 h-5 text-amber-500"/> {selectedFolder?.name}</h2>
+        </div>
+      )}
+
+      <div>
+        <h2 className="text-lg font-extrabold text-stone-700 mb-4 flex items-center gap-2"><Sparkles className="w-5 h-5 text-orange-400" /> {selectedFolderId ? 'フォルダ内の問題' : 'すべての予想問題'}</h2>
+        {displayQuestions.length === 0 ? (
+          <div className="text-center py-8 text-stone-400 font-bold text-sm bg-white rounded-3xl border border-dashed">問題がありません</div>
+        ) : (
+          <div className="space-y-4">
+            {displayQuestions.map(q => (
+              <div key={q.id} onClick={() => onSelectQuestion(q.id)} className="bg-white p-5 rounded-3xl border shadow-md cursor-pointer">
+                <span className="text-[10px] font-extrabold bg-amber-100 text-amber-800 px-2.5 py-1 rounded-md">{q.subject}</span>
+                <h3 className="font-extrabold text-lg text-stone-800 mt-2">{q.title}</h3>
+                <div className="flex justify-between items-center text-xs border-t pt-3 mt-3">
+                  <span className="font-bold text-stone-400">作成: {q.author}</span>
+                  <button onClick={(e) => { e.stopPropagation(); onToggleLike(q.id); }} className={`flex items-center gap-1.5 font-extrabold px-3 py-1.5 rounded-full ${q.likedByMe ? 'bg-rose-100 text-rose-600' : 'bg-stone-50 text-stone-500'}`}><ThumbsUp className="w-4 h-4" /> {q.likes || 0}</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
