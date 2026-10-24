@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  BookOpen, Clock, Calendar, FolderPlus, Plus, ThumbsUp, 
-  MessageSquare, Home, PlusCircle, BarChart2, CheckCircle, 
-  Trash2, ChevronDown, ChevronUp, ArrowLeft, Play, Pause, RotateCcw, 
-  Award, Sparkles, Edit3, TrendingUp, PieChart, Zap, AlertCircle, Camera, QrCode, X
+  BookOpen, Calendar, FolderPlus, Plus, ThumbsUp, 
+  MessageSquare, Home, PlusCircle, ArrowLeft, Camera, QrCode, X
 } from 'lucide-react';
 import { db } from './firebase';
 import { 
@@ -27,9 +25,8 @@ export default function App() {
     return saved ? JSON.parse(saved) : { name: 'テスト対策生', avatar: '🎓', customAvatar: null };
   });
   const [showProfileModal, setShowProfileModal] = useState(false);
-  const [showQrModal, setShowQrModal] = useState(false);
 
-  const [examConfig, setExamConfig] = useState(() => {
+  const [examConfig] = useState(() => {
     const saved = localStorage.getItem('study_app_exam_v3');
     return saved ? JSON.parse(saved) : { name: '', date: '' };
   });
@@ -40,10 +37,6 @@ export default function App() {
   const [showFolderModal, setShowFolderModal] = useState(false);
 
   const [questions, setQuestions] = useState([]);
-  const [studyLogs, setStudyLogs] = useState(() => {
-    const saved = localStorage.getItem('study_app_logs_v3');
-    return saved ? JSON.parse(saved) : [];
-  });
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'folders'), (snapshot) => {
@@ -62,6 +55,17 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('study_app_user_v3', JSON.stringify(userProfile));
   }, [userProfile]);
+
+  const calculateDaysLeft = (targetDateStr) => {
+    if (!targetDateStr) return null;
+    const target = new Date(targetDateStr);
+    const today = new Date();
+    target.setHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0);
+    return Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+  };
+
+  const daysLeft = calculateDaysLeft(examConfig.date);
 
   const handleCreateFolder = async (e) => {
     e.preventDefault();
@@ -111,15 +115,13 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button 
-              onClick={() => setShowProfileModal(true)}
-              className="flex items-center gap-2 bg-amber-100/60 hover:bg-amber-100 px-3 py-1.5 rounded-full transition-all text-sm font-medium border border-amber-200/80 text-amber-900"
-            >
-              <UserAvatar avatar={userProfile?.avatar} customAvatar={userProfile?.customAvatar} size="w-6 h-6" />
-              <span className="max-w-[100px] truncate">{userProfile?.name || 'テスト対策生'}</span>
-            </button>
-          </div>
+          <button 
+            onClick={() => setShowProfileModal(true)}
+            className="flex items-center gap-2 bg-amber-100/60 hover:bg-amber-100 px-3 py-1.5 rounded-full transition-all text-sm font-medium border border-amber-200/80 text-amber-900"
+          >
+            <UserAvatar avatar={userProfile?.avatar} customAvatar={userProfile?.customAvatar} size="w-6 h-6" />
+            <span className="max-w-[100px] truncate">{userProfile?.name || 'テスト対策生'}</span>
+          </button>
         </div>
       </header>
 
@@ -128,6 +130,7 @@ export default function App() {
           <QuestionDetailView 
             question={questions.find(q => q.id === selectedQuestionId)} 
             onBack={() => setSelectedQuestionId(null)}
+            userProfile={userProfile}
             onAddComment={async (qId, text) => {
               const q = questions.find(item => item.id === qId);
               if (!q) return;
@@ -145,6 +148,8 @@ export default function App() {
           <>
             {activeTab === 'home' && (
               <HomeView 
+                examConfig={examConfig}
+                daysLeft={daysLeft}
                 folders={folders}
                 questions={questions}
                 onSelectFolder={(id) => setSelectedFolderId(id)}
@@ -161,8 +166,6 @@ export default function App() {
                 onSuccess={() => setActiveTab('home')}
               />
             )}
-            {activeTab === 'timer' && <TimerView />}
-            {activeTab === 'records' && <RecordsView studyLogs={studyLogs} />}
           </>
         )}
       </main>
@@ -171,8 +174,6 @@ export default function App() {
         <div className="max-w-md mx-auto flex justify-around py-2">
           <NavButton active={activeTab === 'home'} icon={<Home className="w-5 h-5" />} label="ホーム" onClick={() => { setActiveTab('home'); setSelectedQuestionId(null); }} />
           <NavButton active={activeTab === 'create'} icon={<PlusCircle className="w-5 h-5" />} label="投稿する" onClick={() => { setActiveTab('create'); setSelectedQuestionId(null); }} />
-          <NavButton active={activeTab === 'timer'} icon={<Clock className="w-5 h-5" />} label="タイマー" onClick={() => { setActiveTab('timer'); setSelectedQuestionId(null); }} />
-          <NavButton active={activeTab === 'records'} icon={<BarChart2 className="w-5 h-5" />} label="分析・記録" onClick={() => { setActiveTab('records'); setSelectedQuestionId(null); }} />
         </div>
       </nav>
 
@@ -180,12 +181,15 @@ export default function App() {
         <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl space-y-4">
             <h3 className="text-lg font-bold text-stone-800">プロフィール設定</h3>
-            <input 
-              type="text" 
-              value={userProfile?.name || ''}
-              onChange={(e) => setUserProfile({ ...userProfile, name: e.target.value })}
-              className="w-full border p-2.5 rounded-xl text-sm outline-none"
-            />
+            <div>
+              <label className="block text-xs font-semibold text-stone-500 mb-1">表示名</label>
+              <input 
+                type="text" 
+                value={userProfile?.name || ''}
+                onChange={(e) => setUserProfile({ ...userProfile, name: e.target.value })}
+                className="w-full border border-stone-300 rounded-xl p-2.5 text-sm outline-none"
+              />
+            </div>
             <button onClick={() => setShowProfileModal(false)} className="w-full bg-amber-600 text-white py-2 rounded-xl text-xs font-bold">
               保存する
             </button>
@@ -230,7 +234,7 @@ function CreateQuestionView({ folders, defaultFolderId, userProfile, onSuccess }
     e.preventDefault();
     if (!title.trim()) return;
 
-    // プロフィール変更後も safe (undefined 対策)
+    // 安全対策（プロフィールを変更してもundefinedエラーにならない）
     const newQuestion = {
       folderId,
       subject,
@@ -363,9 +367,20 @@ function NavButton({ active, icon, label, onClick }) {
   );
 }
 
-function HomeView({ folders, questions, onSelectFolder, onSelectQuestion, onOpenFolderModal, onToggleLike }) {
+function HomeView({ examConfig, daysLeft, folders, questions, onSelectFolder, onSelectQuestion, onOpenFolderModal, onToggleLike }) {
   return (
     <div className="space-y-6">
+      <div className="bg-gradient-to-r from-amber-600 to-orange-600 rounded-2xl p-5 text-white shadow-md flex justify-between items-center">
+        <div>
+          <h2 className="text-xl font-bold">テスト勉強をスタートしよう！</h2>
+          <p className="text-xs text-amber-100 mt-1">{examConfig.date ? `試験日: ${examConfig.date}` : '試験日未設定'}</p>
+        </div>
+        <div className="bg-white/20 rounded-xl px-4 py-2 text-center">
+          <span className="text-xs">残り日数</span>
+          <p className="text-lg font-bold">{daysLeft !== null ? `${daysLeft}日` : '-'}</p>
+        </div>
+      </div>
+
       <div>
         <div className="flex justify-between items-center mb-3">
           <h2 className="text-base font-bold text-stone-800">テスト対策フォルダ</h2>
@@ -401,42 +416,3 @@ function HomeView({ folders, questions, onSelectFolder, onSelectQuestion, onOpen
     </div>
   );
 }
-
-function TimerView() {
-  const [seconds, setSeconds] = useState(0);
-  const [isActive, setIsActive] = useState(false);
-
-  useEffect(() => {
-    let interval = null;
-    if (isActive) interval = setInterval(() => setSeconds(s => s + 1), 1000);
-    else clearInterval(interval);
-    return () => clearInterval(interval);
-  }, [isActive]);
-
-  return (
-    <div className="bg-white p-6 rounded-2xl text-center space-y-4 border border-amber-100">
-      <h2 className="text-lg font-bold text-stone-800">勉強タイマー</h2>
-      <div className="text-4xl font-extrabold text-amber-600">
-        {Math.floor(seconds / 60)}分 {seconds % 60}秒
-      </div>
-      <div className="flex justify-center gap-3">
-        <button onClick={() => setIsActive(!isActive)} className="bg-amber-600 text-white px-6 py-2 rounded-xl text-xs font-bold">
-          {isActive ? '一時停止' : 'スタート'}
-        </button>
-        <button onClick={() => { setSeconds(0); setIsActive(false); }} className="bg-stone-100 text-stone-600 px-4 py-2 rounded-xl text-xs font-bold">
-          リセット
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function RecordsView({ studyLogs }) {
-  return (
-    <div className="bg-white p-6 rounded-2xl space-y-4 border border-amber-100">
-      <h2 className="text-lg font-bold text-stone-800">学習記録</h2>
-      {studyLogs.length === 0 ? (
-        <p className="text-xs text-stone-400">まだ記録がありません。</p>
-      ) : (
-        <ul className="space-y-2">
-          {studyLogs.map((log,
