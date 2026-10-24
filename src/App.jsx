@@ -17,12 +17,6 @@ const SUBJECTS = [
   '音楽', '英語１', '英語２'
 ];
 
-const SUBJECT_COLORS = [
-  'bg-amber-500', 'bg-orange-500', 'bg-amber-600', 'bg-yellow-500', 'bg-emerald-500',
-  'bg-teal-500', 'bg-cyan-500', 'bg-sky-500', 'bg-indigo-500', 'bg-violet-500',
-  'bg-purple-500', 'bg-fuchsia-500', 'bg-rose-500'
-];
-
 export default function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [selectedFolderId, setSelectedFolderId] = useState(null);
@@ -111,18 +105,6 @@ export default function App() {
     }
   };
 
-  const handleAddStudyLog = (logData) => {
-    const newLog = {
-      id: 'log_' + Date.now(),
-      subject: logData.subject,
-      minutes: logData.minutes,
-      timestamp: new Date().toLocaleDateString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
-      dateISO: new Date().toISOString().split('T')[0]
-    };
-    setStudyLogs([newLog, ...studyLogs]);
-    setActiveTab('records');
-  };
-
   const handleToggleLike = async (qId) => {
     const q = questions.find(item => item.id === qId);
     if (!q) return;
@@ -189,24 +171,5 @@ export default function App() {
             <button 
               onClick={() => setShowQrModal(true)}
               className="p-2 text-amber-800 bg-amber-100/60 hover:bg-amber-100 rounded-full border border-amber-200/80 transition"
-              title="QRコードで共有"
             >
-              <QrCode className="w-4 h-4" />
-            </button>
-            <button 
-              onClick={() => setShowProfileModal(true)}
-              className="flex items-center gap-2 bg-amber-100/60 hover:bg-amber-100 px-3 py-1.5 rounded-full transition-all text-sm font-medium border border-amber-200/80 text-amber-900"
-            >
-              <UserAvatar avatar={userProfile?.avatar} customAvatar={userProfile?.customAvatar} size="w-6 h-6" />
-              <span className="max-w-[100px] truncate">{userProfile?.name || 'テスト対策生'}</span>
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-4xl mx-auto px-4 py-6 flex-1 w-full">
-        {selectedQuestionId ? (
-          <QuestionDetailView 
-            question={questions.find(q => q.id === selectedQuestionId)} 
-            onBack={() => setSelectedQuestionId(null)}
-            userProfile={
+              <QrCode className="w-4 h
