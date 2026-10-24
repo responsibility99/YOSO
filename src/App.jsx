@@ -3,7 +3,7 @@ import {
   BookOpen, Clock, FolderPlus, ThumbsUp, 
   Home, PlusCircle, BarChart2, ArrowLeft, Trash2, Calendar, Sparkles,
   MessageCircle, Send, Trophy, Medal, Flame, KeyRound, LogOut,
-  ImagePlus, X // ← 新規追加
+  ImagePlus, X, HelpCircle // ← HelpCircleを追加
 } from 'lucide-react';
 import { db } from './firebase';
 import { 
@@ -46,6 +46,7 @@ export default function App() {
     };
   });
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false); // ← ヘルプ画面用の状態
   const [showLevelUp, setShowLevelUp] = useState(false);
   const [tempCode, setTempCode] = useState('');
 
@@ -180,10 +181,17 @@ export default function App() {
           <div className="bg-white/20 p-2 rounded-xl backdrop-blur-sm"><BookOpen className="w-5 h-5 text-white" /></div>
           <h1 className="font-extrabold text-lg drop-shadow-md">YOSO</h1>
         </div>
-        <button onClick={() => setShowProfileModal(true)} className="bg-white/90 hover:bg-white text-stone-700 px-3 py-1.5 rounded-full text-sm font-bold shadow-md transition transform hover:scale-105 flex items-center gap-2">
-          <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full text-[10px] font-extrabold">Lv.{userProfile.level}</span>
-          <span>{userProfile.avatar} {userProfile.name}</span>
-        </button>
+        
+        {/* ヘッダー右側のボタン群 */}
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowHelpModal(true)} className="bg-white/90 hover:bg-white text-amber-600 p-2 rounded-full shadow-md transition transform hover:scale-105">
+            <HelpCircle className="w-5 h-5" />
+          </button>
+          <button onClick={() => setShowProfileModal(true)} className="bg-white/90 hover:bg-white text-stone-700 px-3 py-1.5 rounded-full text-sm font-bold shadow-md transition transform hover:scale-105 flex items-center gap-2">
+            <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full text-[10px] font-extrabold">Lv.{userProfile.level}</span>
+            <span>{userProfile.avatar} {userProfile.name}</span>
+          </button>
+        </div>
       </header>
 
       <main className="max-w-4xl mx-auto p-4 flex-1 w-full flex flex-col">
@@ -241,6 +249,38 @@ export default function App() {
         <NavButton active={activeTab === 'records'} icon={<BarChart2 className="w-6 h-6" />} label="記録" onClick={() => { setActiveTab('records'); setSelectedQuestionId(null); }} />
         <NavButton active={activeTab === 'timer'} icon={<Clock className="w-6 h-6" />} label="タイマー" onClick={() => { setActiveTab('timer'); setSelectedQuestionId(null); }} />
       </nav>
+
+      {/* ヘルプモーダル */}
+      {showHelpModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white p-6 rounded-3xl max-w-sm w-full shadow-2xl flex flex-col max-h-[85vh]">
+            <h3 className="font-extrabold text-xl text-center text-amber-900 border-b pb-3 mb-4 flex items-center justify-center gap-2">
+              <HelpCircle className="w-6 h-6" /> 使い方ガイド
+            </h3>
+            <div className="overflow-y-auto pr-2 space-y-4 flex-1 text-sm font-bold text-stone-700">
+              <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100">
+                <h4 className="text-amber-800 font-extrabold mb-1">🔑 グループ（合言葉）</h4>
+                <p className="text-xs">同じ合言葉を入力した人同士で、問題やチャットが共有されます。退出・変更は右上のプロフィールから行えます。</p>
+              </div>
+              <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100">
+                <h4 className="text-orange-800 font-extrabold mb-1">✍️ 問題の投稿・解答</h4>
+                <p className="text-xs">「投稿」タブから予想問題を作れます。ホーム画面で問題をタップすると答え合わせやコメントができます。</p>
+              </div>
+              <div className="bg-yellow-50 p-4 rounded-2xl border border-yellow-100">
+                <h4 className="text-yellow-800 font-extrabold mb-1">🏆 XPとレベル・バッジ</h4>
+                <p className="text-xs">タイマーを使ったり、問題を投稿・コメントするとXP（経験値）が貯まりレベルアップ！条件を満たすとバッジも貰えます。</p>
+              </div>
+              <div className="bg-stone-50 p-4 rounded-2xl border border-stone-200">
+                <h4 className="text-stone-800 font-extrabold mb-1">💬 チャット機能</h4>
+                <p className="text-xs">画像の送信や、自分が送ったメッセージの取り消し（ゴミ箱アイコン）が可能です。</p>
+              </div>
+            </div>
+            <div className="mt-4 pt-3 border-t">
+              <button onClick={() => setShowHelpModal(false)} className="w-full bg-amber-500 text-white py-3 rounded-xl text-sm font-extrabold shadow-lg">閉じる</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 手動記録モーダル */}
       {showManualLogModal && (
@@ -354,7 +394,6 @@ function ChatView({ userProfile, onMessageSent }) {
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
-  // 画像圧縮とプレビュー生成 (Firestoreのデータサイズ制限対策)
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -364,13 +403,13 @@ function ChatView({ userProfile, onMessageSent }) {
       const img = new window.Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 500; // 横幅を最大500pxにリサイズ
+        const MAX_WIDTH = 500;
         const scaleSize = MAX_WIDTH / img.width;
         canvas.width = MAX_WIDTH;
         canvas.height = img.height * scaleSize;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        setPreviewUrl(canvas.toDataURL('image/jpeg', 0.6)); // 画質を下げて圧縮
+        setPreviewUrl(canvas.toDataURL('image/jpeg', 0.6));
       };
       img.src = event.target.result;
     };
@@ -409,7 +448,6 @@ function ChatView({ userProfile, onMessageSent }) {
     <div className="flex flex-col flex-1" style={{ maxHeight: 'calc(100vh - 180px)' }}>
       <h2 className="text-xl font-extrabold text-stone-700 flex items-center gap-2 mb-3"><MessageCircle className="w-6 h-6 text-amber-500" /> グループチャット</h2>
       
-      {/* チャット履歴 */}
       <div className="flex-1 bg-stone-50/70 rounded-3xl border border-amber-100 p-4 overflow-y-auto space-y-4 shadow-inner">
         {messages.map(msg => (
           <div key={msg.id} className={`flex gap-2 ${msg.uid === userProfile.uid ? 'flex-row-reverse' : 'flex-row'} group`}>
@@ -417,7 +455,6 @@ function ChatView({ userProfile, onMessageSent }) {
             <div className={`max-w-[75%] flex flex-col ${msg.uid === userProfile.uid ? 'items-end' : 'items-start'}`}>
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-[11px] font-bold text-stone-400 px-1">{msg.user}</span>
-                {/* 自分のメッセージのみ削除ボタンを表示 */}
                 {msg.uid === userProfile.uid && (
                   <button onClick={() => handleDelete(msg.id)} className="text-stone-300 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100">
                     <Trash2 className="w-3.5 h-3.5" />
@@ -434,7 +471,6 @@ function ChatView({ userProfile, onMessageSent }) {
         <div ref={bottomRef} />
       </div>
 
-      {/* 画像プレビュー領域 */}
       {previewUrl && (
         <div className="mt-3 relative inline-block">
           <div className="bg-stone-200/50 p-2 rounded-2xl border-2 border-dashed border-stone-300 w-32 h-32 flex items-center justify-center overflow-hidden">
@@ -444,7 +480,6 @@ function ChatView({ userProfile, onMessageSent }) {
         </div>
       )}
 
-      {/* 入力フォーム */}
       <form onSubmit={handleSend} className="mt-3 flex gap-2 items-center bg-white p-2 rounded-3xl shadow-sm border border-stone-200">
         <label className="cursor-pointer text-stone-400 hover:text-amber-500 p-2 transition-colors">
           <ImagePlus className="w-6 h-6" />
