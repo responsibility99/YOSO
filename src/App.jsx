@@ -35,9 +35,10 @@ export default function App() {
   });
   const [showProfileModal, setShowProfileModal] = useState(false);
 
+  // 初期状態を「未設定」に修正
   const [examConfig, setExamConfig] = useState(() => {
     const saved = localStorage.getItem('study_app_exam_v3');
-    return saved ? JSON.parse(saved) : { name: '定期テスト', date: '2026-11-15' };
+    return saved ? JSON.parse(saved) : { name: '', date: '' };
   });
   const [isEditingExam, setIsEditingExam] = useState(false);
 
@@ -54,7 +55,6 @@ export default function App() {
 
   const [deleteConfirmQId, setDeleteConfirmQId] = useState(null);
 
-  // Firestore リアルタイム同期（フォルダ）
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'folders'), (snapshot) => {
       const folderList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -63,7 +63,6 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // Firestore リアルタイム同期（問題）
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'questions'), (snapshot) => {
       const qList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -85,6 +84,7 @@ export default function App() {
   }, [studyLogs]);
 
   const calculateDaysLeft = (targetDateStr) => {
+    if (!targetDateStr) return null;
     const target = new Date(targetDateStr);
     const today = new Date();
     target.setHours(0, 0, 0, 0);
@@ -168,7 +168,7 @@ export default function App() {
             </div>
             <div>
               <h1 className="font-extrabold text-lg text-stone-800 tracking-tight leading-none">定期テスト予想問題</h1>
-              <span className="text-xs text-amber-700 font-semibold">YOSO (クラウド連携済)</span>
+              <span className="text-xs text-amber-700 font-semibold">YOSO</span>
             </div>
           </div>
 
@@ -505,21 +505,29 @@ function HomeView({ examConfig, daysLeft, setIsEditingExam, folders, questions, 
           <div>
             <div className="flex items-center gap-2 mb-1">
               <Calendar className="w-4 h-4 text-amber-200" />
-              <span className="text-xs font-semibold text-amber-200 tracking-wider uppercase">{examConfig.name}</span>
+              <span className="text-xs font-semibold text-amber-200 tracking-wider uppercase">
+                {examConfig.name || '定期テスト'}
+              </span>
               <button 
                 onClick={() => setIsEditingExam(true)}
                 className="text-xs bg-white/20 hover:bg-white/30 px-2 py-0.5 rounded text-white flex items-center gap-1 ml-2 transition"
               >
-                <Edit3 className="w-3 h-3" /> 日程設定
+                <Edit3 className="w-3 h-3" /> 日程を設定する
               </button>
             </div>
             <h2 className="text-xl md:text-2xl font-bold">テスト勉強をスタートしよう！</h2>
-            <p className="text-xs text-amber-100 mt-1">試験日: {examConfig.date}</p>
+            <p className="text-xs text-amber-100 mt-1">
+              {examConfig.date ? `試験日: ${examConfig.date}` : '試験日が未設定です'}
+            </p>
           </div>
           <div className="bg-white/15 backdrop-blur-md border border-white/20 rounded-2xl px-6 py-3 text-center self-stretch md:self-auto flex flex-col justify-center">
             <span className="text-xs text-amber-100 font-medium">残り日数</span>
-            <span className="text-2xl md:text-3xl font-extrabold tracking-tight">
-              {daysLeft > 0 ? `あと ${daysLeft} 日` : daysLeft === 0 ? '本日試験日！' : '試験終了'}
+            <span className="text-xl md:text-2xl font-extrabold tracking-tight">
+              {examConfig.date ? (
+                daysLeft > 0 ? `あと ${daysLeft} 日` : daysLeft === 0 ? '本日試験日！' : '試験終了'
+              ) : (
+                '未設定'
+              )}
             </span>
           </div>
         </div>
@@ -1230,159 +1238,4 @@ function EnhancedRecordsView({ studyLogs, onClearLogs }) {
   return (
     <div className="space-y-6">
       <div className="bg-gradient-to-r from-amber-600 via-orange-500 to-amber-700 rounded-3xl p-6 text-white shadow-lg relative overflow-hidden">
-        <div className="absolute -right-4 -bottom-4 opacity-10">
-          <Award className="w-48 h-48" />
-        </div>
-        <div className="relative z-10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <span className="text-xs font-semibold text-amber-200 uppercase tracking-widest flex items-center gap-1">
-              <Zap className="w-3.5 h-3.5" /> 累計学習レポート
-            </span>
-            <div className="text-3xl sm:text-4xl font-extrabold tracking-tight mt-1">
-              {hours} <span className="text-lg font-normal text-amber-100">時間</span> {minutes} <span className="text-lg font-normal text-amber-100">分</span>
-            </div>
-            <p className="text-xs text-amber-100 mt-1">目標に向かって一歩ずつ前進中！</p>
-          </div>
-          <div className="bg-white/20 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/30 text-center">
-            <span className="text-xs text-amber-100 block">記録数</span>
-            <span className="text-xl font-bold">{studyLogs.length} 回</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white p-5 rounded-2xl border border-stone-200/80 shadow-sm space-y-4">
-        <h3 className="font-bold text-stone-800 text-base flex items-center gap-2">
-          <PieChart className="w-5 h-5 text-amber-600" />
-          科目別学習バランス
-        </h3>
-
-        {totalMinutes === 0 ? (
-          <div className="text-center py-6 text-stone-400 text-xs">
-            学習記録を追加すると、科目ごとのグラフが表示されます
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <div className="h-4 w-full bg-stone-100 rounded-full overflow-hidden flex shadow-inner">
-              {activeSubjects.map(([subj, mins], idx) => {
-                const pct = ((mins / totalMinutes) * 100).toFixed(1);
-                return (
-                  <div 
-                    key={subj} 
-                    style={{ width: `${pct}%` }} 
-                    className={`${SUBJECT_COLORS[idx % SUBJECT_COLORS.length]} h-full transition-all`}
-                    title={`${subj}: ${mins}分 (${pct}%)`}
-                  />
-                );
-              })}
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2">
-              {activeSubjects.map(([subj, mins], idx) => {
-                const pct = Math.round((mins / totalMinutes) * 100);
-                return (
-                  <div key={subj} className="flex items-center gap-2 text-xs bg-stone-50 p-2 rounded-xl">
-                    <span className={`w-3 h-3 rounded-full ${SUBJECT_COLORS[idx % SUBJECT_COLORS.length]}`}></span>
-                    <span className="font-semibold text-stone-700 truncate">{subj}</span>
-                    <span className="text-stone-400 ml-auto font-mono">{pct}%</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="bg-white p-5 rounded-2xl border border-stone-200/80 shadow-sm space-y-4">
-        <h3 className="font-bold text-stone-800 text-base flex items-center gap-2">
-          <TrendingUp className="w-5 h-5 text-amber-600" />
-          直近7日間の学習リズム
-        </h3>
-
-        <div className="flex items-end justify-between gap-2 h-36 pt-6 pb-2 px-2 border-b border-stone-100">
-          {weeklyData.map((d, i) => {
-            const barHeightPct = totalMinutes === 0 ? 0 : Math.min(100, Math.round((d.dayMins / maxWeeklyMins) * 100));
-            return (
-              <div key={i} className="flex-1 flex flex-col items-center gap-2 h-full justify-end group">
-                <span className="text-[10px] text-stone-400 group-hover:text-amber-700 font-mono">
-                  {d.dayMins > 0 ? `${d.dayMins}分` : ''}
-                </span>
-                <div className="w-full bg-stone-100 rounded-t-lg h-24 flex items-end overflow-hidden">
-                  <div 
-                    style={{ height: `${barHeightPct}%` }}
-                    className="w-full bg-gradient-to-t from-amber-600 to-amber-400 rounded-t-lg transition-all duration-500 group-hover:from-amber-500 group-hover:to-orange-400"
-                  />
-                </div>
-                <span className="text-xs font-semibold text-stone-600">{d.dayLabel}</span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="bg-white p-5 rounded-2xl border border-stone-200/80 shadow-sm space-y-3">
-        <h3 className="font-bold text-stone-800 text-base flex items-center gap-2">
-          <Award className="w-5 h-5 text-amber-600" />
-          獲得バッジ
-        </h3>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {badges.map((b, idx) => (
-            <div 
-              key={idx} 
-              className={`p-3 rounded-2xl border transition flex items-center gap-3 ${
-                b.unlocked 
-                  ? 'bg-amber-50/70 border-amber-200 text-stone-800' 
-                  : 'bg-stone-50 border-stone-200 opacity-50 grayscale'
-              }`}
-            >
-              <div className="text-2xl">{b.icon}</div>
-              <div>
-                <h4 className="font-bold text-xs">{b.title}</h4>
-                <p className="text-[10px] text-stone-500">{b.desc}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="bg-white p-5 rounded-2xl border border-stone-200/80 shadow-sm space-y-4">
-        <div className="flex justify-between items-center">
-          <h3 className="font-bold text-stone-800 text-base flex items-center gap-2">
-            <BarChart2 className="w-5 h-5 text-amber-600" />
-            学習記録の履歴
-          </h3>
-          {studyLogs.length > 0 && (
-            <button 
-              onClick={onClearLogs}
-              className="text-xs text-rose-500 hover:text-rose-700 font-medium flex items-center gap-1 transition"
-            >
-              <Trash2 className="w-3.5 h-3.5" /> 記録を全消去
-            </button>
-          )}
-        </div>
-
-        {studyLogs.length === 0 ? (
-          <div className="text-center py-8 text-stone-400 space-y-2">
-            <Clock className="w-8 h-8 mx-auto text-stone-300" />
-            <p className="text-sm font-medium">まだ勉強記録がありません</p>
-            <p className="text-xs text-stone-400">「タイマー」で勉強時間を計測して記録してみよう！</p>
-          </div>
-        ) : (
-          <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-            {studyLogs.map(log => (
-              <div key={log.id} className="p-3 bg-stone-50 rounded-xl flex justify-between items-center text-xs">
-                <div>
-                  <span className="font-bold text-stone-800 mr-2">{log.subject}</span>
-                  <span className="text-stone-400">{log.timestamp}</span>
-                </div>
-                <span className="font-bold text-amber-800 bg-amber-100/70 px-2.5 py-1 rounded-md border border-amber-200/60">
-                  {log.minutes} 分間
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+        <div className
