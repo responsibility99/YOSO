@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  BookOpen, Clock, Calendar, FolderPlus, Plus, Search, ThumbsUp, 
+  BookOpen, Clock, Calendar, FolderPlus, Plus, ThumbsUp, 
   MessageSquare, User, Home, PlusCircle, BarChart2, CheckCircle, 
   Trash2, ChevronDown, ChevronUp, ArrowLeft, Play, Pause, RotateCcw, 
-  Settings, Award, Sparkles, Filter, Edit3, Flame,
-  TrendingUp, PieChart, Layers, CheckCircle2, Zap, AlertCircle, Camera, QrCode, X
+  Award, Sparkles, Edit3, TrendingUp, PieChart, Zap, AlertCircle, Camera, QrCode, X
 } from 'lucide-react';
 import { db } from './firebase';
 import { 
@@ -108,7 +107,7 @@ export default function App() {
       setNewFolderDesc('');
       setShowFolderModal(false);
     } catch (err) {
-      alert('エラーが発生しました');
+      alert('フォルダ作成中にエラーが発生しました');
     }
   };
 
@@ -145,7 +144,7 @@ export default function App() {
       setDeleteConfirmQId(null);
       setSelectedQuestionId(null);
     } catch (err) {
-      alert('削除できませんでした');
+      alert('削除に失敗しました');
     }
   };
 
@@ -189,23 +188,4 @@ export default function App() {
           <div className="flex items-center gap-2">
             <button 
               onClick={() => setShowQrModal(true)}
-              className="p-2 text-amber-800 bg-amber-100/60 hover:bg-amber-100 rounded-full border border-amber-200/80 transition"
-              title="QRコードで共有"
-            >
-              <QrCode className="w-4 h-4" />
-            </button>
-            <button 
-              onClick={() => setShowProfileModal(true)}
-              className="flex items-center gap-2 bg-amber-100/60 hover:bg-amber-100 px-3 py-1.5 rounded-full transition-all text-sm font-medium border border-amber-200/80 text-amber-900"
-            >
-              <UserAvatar avatar={userProfile.avatar} customAvatar={userProfile.customAvatar} size="w-6 h-6" />
-              <span className="max-w-[100px] truncate">{userProfile.name}</span>
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-4xl mx-auto px-4 py-6 flex-1 w-full">
-        {selectedQuestionId ? (
-          <QuestionDetailView 
-            question={questions.find(q => q.id === selectedQuestionId)}
+              className="p-2 text-amber-800 bg-amber-100/60 hover:bg-amber-100 rounded-full border border-
