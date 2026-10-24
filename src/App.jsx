@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  BookOpen, Clock, Calendar, FolderPlus, Plus, ThumbsUp, 
-  MessageSquare, Home, PlusCircle, BarChart2, CheckCircle, 
-  Trash2, ArrowLeft
+  BookOpen, Clock, FolderPlus, Plus, ThumbsUp, 
+  Home, PlusCircle, BarChart2, ArrowLeft, Trash2
 } from 'lucide-react';
 import { db } from './firebase';
 import { 
   collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, serverTimestamp 
 } from 'firebase/firestore';
 import './index.css';
+
+// 外部コンポーネントの読み込み
+import TimerView from './components/TimerView';
+import RecordsView from './components/RecordsView';
 
 const SUBJECTS = [
   '国語1', '国語２a', '国語２ｂ', '歴史', '地理', 
@@ -26,11 +29,6 @@ export default function App() {
     return saved ? JSON.parse(saved) : { name: 'テスト対策生', avatar: '🎓', customAvatar: null };
   });
   const [showProfileModal, setShowProfileModal] = useState(false);
-
-  const [examConfig] = useState(() => {
-    const saved = localStorage.getItem('study_app_exam_v3');
-    return saved ? JSON.parse(saved) : { name: '', date: '' };
-  });
 
   const [folders, setFolders] = useState([]);
   const [newFolderName, setNewFolderName] = useState('');
@@ -104,12 +102,10 @@ export default function App() {
     }
   };
 
-  const handleSaveLog = (subject, minutes) => {
+  const handleSaveStudyLog = (logData) => {
     const newLog = {
-      id: Date.now(),
-      subject,
-      minutes,
-      date: new Date().toLocaleDateString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+      id: 'log_' + Date.now(),
+      ...logData
     };
     setStudyLogs([newLog, ...studyLogs]);
     setActiveTab('records');
@@ -161,10 +157,10 @@ export default function App() {
               />
             )}
             {activeTab === 'timer' && (
-              <TimerView onSaveLog={handleSaveLog} />
+              <TimerView onSaveLog={handleSaveStudyLog} />
             )}
             {activeTab === 'records' && (
-              <RecordsView studyLogs={studyLogs} onClear={() => setStudyLogs([])} />
+              <RecordsView studyLogs={studyLogs} onClearLogs={() => setStudyLogs([])} />
             )}
           </>
         )}
@@ -353,82 +349,6 @@ function HomeView({ folders, questions, onSelectQuestion, onOpenFolderModal, onT
           ))}
         </div>
       </div>
-    </div>
-  );
-}
-
-function TimerView({ onSaveLog }) {
-  const [seconds, setSeconds] = useState(0);
-  const [isActive, setIsActive] = useState(false);
-  const [subject, setSubject] = useState(SUBJECTS[0]);
-
-  useEffect(() => {
-    let interval = null;
-    if (isActive) interval = setInterval(() => setSeconds(s => s + 1), 1000);
-    else clearInterval(interval);
-    return () => clearInterval(interval);
-  }, [isActive]);
-
-  const handleFinish = () => {
-    const minutes = Math.max(1, Math.round(seconds / 60));
-    onSaveLog(subject, minutes);
-    setSeconds(0);
-    setIsActive(false);
-  };
-
-  return (
-    <div className="bg-white p-6 rounded-2xl text-center space-y-4 border border-amber-100 max-w-md mx-auto">
-      <h2 className="text-lg font-bold text-stone-800">勉強タイマー</h2>
-      <select value={subject} onChange={(e) => setSubject(e.target.value)} className="w-full border p-2 rounded-xl text-sm">
-        {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
-      </select>
-      <div className="text-4xl font-extrabold text-amber-600 py-4">
-        {Math.floor(seconds / 60)}分 {seconds % 60}秒
-      </div>
-      <div className="flex justify-center gap-2">
-        <button onClick={() => setIsActive(!isActive)} className="bg-amber-600 text-white px-5 py-2 rounded-xl text-xs font-bold">
-          {isActive ? '一時停止' : 'スタート'}
-        </button>
-        {seconds > 0 && (
-          <button onClick={handleFinish} className="bg-emerald-600 text-white px-5 py-2 rounded-xl text-xs font-bold">
-            記録して終了
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function RecordsView({ studyLogs, onClear }) {
-  const totalMinutes = studyLogs.reduce((acc, log) => acc + log.minutes, 0);
-
-  return (
-    <div className="bg-white p-6 rounded-2xl space-y-4 border border-amber-100 max-w-md mx-auto">
-      <div className="flex justify-between items-center">
-        <h2 className="text-lg font-bold text-stone-800">学習記録</h2>
-        {studyLogs.length > 0 && (
-          <button onClick={onClear} className="text-xs text-rose-500 underline">全削除</button>
-        )}
-      </div>
-      <div className="bg-amber-50 p-4 rounded-xl text-center">
-        <span className="text-xs text-stone-500">合計勉強時間</span>
-        <p className="text-2xl font-bold text-amber-700">{totalMinutes} 分</p>
-      </div>
-      {studyLogs.length === 0 ? (
-        <p className="text-xs text-stone-400 text-center py-4">まだ記録がありません。タイマーで勉強時間を測ってみよう！</p>
-      ) : (
-        <ul className="space-y-2 max-h-60 overflow-y-auto">
-          {studyLogs.map((log) => (
-            <li key={log.id} className="text-xs p-3 bg-stone-50 rounded-xl flex justify-between items-center border">
-              <div>
-                <span className="font-bold text-stone-700">{log.subject}</span>
-                <p className="text-[10px] text-stone-400">{log.date}</p>
-              </div>
-              <span className="font-bold text-amber-700">{log.minutes} 分</span>
-            </li>
-          ))}
-        </ul>
-      )}
     </div>
   );
 }
