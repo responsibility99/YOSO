@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  BookOpen, Plus, ThumbsUp, Home, PlusCircle, ArrowLeft, Trash2
+  BookOpen, Clock, Calendar, FolderPlus, Plus, ThumbsUp, 
+  MessageSquare, Home, PlusCircle, BarChart2, CheckCircle, 
+  Trash2, ArrowLeft
 } from 'lucide-react';
 import { db } from './firebase';
 import { 
@@ -25,11 +27,20 @@ export default function App() {
   });
   const [showProfileModal, setShowProfileModal] = useState(false);
 
+  const [examConfig] = useState(() => {
+    const saved = localStorage.getItem('study_app_exam_v3');
+    return saved ? JSON.parse(saved) : { name: '', date: '' };
+  });
+
   const [folders, setFolders] = useState([]);
   const [newFolderName, setNewFolderName] = useState('');
   const [showFolderModal, setShowFolderModal] = useState(false);
 
   const [questions, setQuestions] = useState([]);
+  const [studyLogs, setStudyLogs] = useState(() => {
+    const saved = localStorage.getItem('study_app_logs_v3');
+    return saved ? JSON.parse(saved) : [];
+  });
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'folders'), (snapshot) => {
@@ -48,6 +59,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('study_app_user_v3', JSON.stringify(userProfile));
   }, [userProfile]);
+
+  useEffect(() => {
+    localStorage.setItem('study_app_logs_v3', JSON.stringify(studyLogs));
+  }, [studyLogs]);
 
   const handleCreateFolder = async (e) => {
     e.preventDefault();
@@ -87,6 +102,17 @@ export default function App() {
         alert('削除に失敗しました');
       }
     }
+  };
+
+  const handleSaveLog = (subject, minutes) => {
+    const newLog = {
+      id: Date.now(),
+      subject,
+      minutes,
+      date: new Date().toLocaleDateString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    };
+    setStudyLogs([newLog, ...studyLogs]);
+    setActiveTab('records');
   };
 
   return (
@@ -134,17 +160,21 @@ export default function App() {
                 onSuccess={() => setActiveTab('home')}
               />
             )}
+            {activeTab === 'timer' && (
+              <TimerView onSaveLog={handleSaveLog} />
+            )}
+            {activeTab === 'records' && (
+              <RecordsView studyLogs={studyLogs} onClear={() => setStudyLogs([])} />
+            )}
           </>
         )}
       </main>
 
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t p-2 z-30 flex justify-around">
-        <button onClick={() => { setActiveTab('home'); setSelectedQuestionId(null); }} className={`flex flex-col items-center text-xs ${activeTab === 'home' ? 'text-amber-700 font-bold' : 'text-stone-400'}`}>
-          <Home className="w-5 h-5" /> ホーム
-        </button>
-        <button onClick={() => { setActiveTab('create'); setSelectedQuestionId(null); }} className={`flex flex-col items-center text-xs ${activeTab === 'create' ? 'text-amber-700 font-bold' : 'text-stone-400'}`}>
-          <PlusCircle className="w-5 h-5" /> 投稿する
-        </button>
+        <NavButton active={activeTab === 'home'} icon={<Home className="w-5 h-5" />} label="ホーム" onClick={() => { setActiveTab('home'); setSelectedQuestionId(null); }} />
+        <NavButton active={activeTab === 'create'} icon={<PlusCircle className="w-5 h-5" />} label="投稿する" onClick={() => { setActiveTab('create'); setSelectedQuestionId(null); }} />
+        <NavButton active={activeTab === 'timer'} icon={<Clock className="w-5 h-5" />} label="タイマー" onClick={() => { setActiveTab('timer'); setSelectedQuestionId(null); }} />
+        <NavButton active={activeTab === 'records'} icon={<BarChart2 className="w-5 h-5" />} label="分析・記録" onClick={() => { setActiveTab('records'); setSelectedQuestionId(null); }} />
       </nav>
 
       {showProfileModal && (
@@ -170,6 +200,15 @@ export default function App() {
         </div>
       )}
     </div>
+  );
+}
+
+function NavButton({ active, icon, label, onClick }) {
+  return (
+    <button onClick={onClick} className={`flex flex-col items-center text-xs ${active ? 'text-amber-700 font-bold' : 'text-stone-400'}`}>
+      {icon}
+      <span>{label}</span>
+    </button>
   );
 }
 
@@ -314,6 +353,82 @@ function HomeView({ folders, questions, onSelectQuestion, onOpenFolderModal, onT
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+function TimerView({ onSaveLog }) {
+  const [seconds, setSeconds] = useState(0);
+  const [isActive, setIsActive] = useState(false);
+  const [subject, setSubject] = useState(SUBJECTS[0]);
+
+  useEffect(() => {
+    let interval = null;
+    if (isActive) interval = setInterval(() => setSeconds(s => s + 1), 1000);
+    else clearInterval(interval);
+    return () => clearInterval(interval);
+  }, [isActive]);
+
+  const handleFinish = () => {
+    const minutes = Math.max(1, Math.round(seconds / 60));
+    onSaveLog(subject, minutes);
+    setSeconds(0);
+    setIsActive(false);
+  };
+
+  return (
+    <div className="bg-white p-6 rounded-2xl text-center space-y-4 border border-amber-100 max-w-md mx-auto">
+      <h2 className="text-lg font-bold text-stone-800">勉強タイマー</h2>
+      <select value={subject} onChange={(e) => setSubject(e.target.value)} className="w-full border p-2 rounded-xl text-sm">
+        {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
+      </select>
+      <div className="text-4xl font-extrabold text-amber-600 py-4">
+        {Math.floor(seconds / 60)}分 {seconds % 60}秒
+      </div>
+      <div className="flex justify-center gap-2">
+        <button onClick={() => setIsActive(!isActive)} className="bg-amber-600 text-white px-5 py-2 rounded-xl text-xs font-bold">
+          {isActive ? '一時停止' : 'スタート'}
+        </button>
+        {seconds > 0 && (
+          <button onClick={handleFinish} className="bg-emerald-600 text-white px-5 py-2 rounded-xl text-xs font-bold">
+            記録して終了
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RecordsView({ studyLogs, onClear }) {
+  const totalMinutes = studyLogs.reduce((acc, log) => acc + log.minutes, 0);
+
+  return (
+    <div className="bg-white p-6 rounded-2xl space-y-4 border border-amber-100 max-w-md mx-auto">
+      <div className="flex justify-between items-center">
+        <h2 className="text-lg font-bold text-stone-800">学習記録</h2>
+        {studyLogs.length > 0 && (
+          <button onClick={onClear} className="text-xs text-rose-500 underline">全削除</button>
+        )}
+      </div>
+      <div className="bg-amber-50 p-4 rounded-xl text-center">
+        <span className="text-xs text-stone-500">合計勉強時間</span>
+        <p className="text-2xl font-bold text-amber-700">{totalMinutes} 分</p>
+      </div>
+      {studyLogs.length === 0 ? (
+        <p className="text-xs text-stone-400 text-center py-4">まだ記録がありません。タイマーで勉強時間を測ってみよう！</p>
+      ) : (
+        <ul className="space-y-2 max-h-60 overflow-y-auto">
+          {studyLogs.map((log) => (
+            <li key={log.id} className="text-xs p-3 bg-stone-50 rounded-xl flex justify-between items-center border">
+              <div>
+                <span className="font-bold text-stone-700">{log.subject}</span>
+                <p className="text-[10px] text-stone-400">{log.date}</p>
+              </div>
+              <span className="font-bold text-amber-700">{log.minutes} 分</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
