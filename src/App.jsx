@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   BookOpen, Clock, FolderPlus, Plus, ThumbsUp, 
-  Home, PlusCircle, BarChart2, ArrowLeft, Trash2
+  Home, PlusCircle, BarChart2, ArrowLeft, Trash2, Calendar, Sparkles
 } from 'lucide-react';
 import { db } from './firebase';
 import { 
@@ -9,7 +9,6 @@ import {
 } from 'firebase/firestore';
 import './index.css';
 
-// 外部コンポーネントの読み込み
 import TimerView from './components/TimerView';
 import RecordsView from './components/RecordsView';
 
@@ -24,9 +23,10 @@ export default function App() {
   const [selectedFolderId, setSelectedFolderId] = useState(null);
   const [selectedQuestionId, setSelectedQuestionId] = useState(null);
 
+  // プロフィールに testDate（テスト日程）を追加
   const [userProfile, setUserProfile] = useState(() => {
-    const saved = localStorage.getItem('study_app_user_v3');
-    return saved ? JSON.parse(saved) : { name: 'テスト対策生', avatar: '🎓', customAvatar: null };
+    const saved = localStorage.getItem('study_app_user_v4');
+    return saved ? JSON.parse(saved) : { name: 'テスト対策生', avatar: '🎓', testDate: '' };
   });
   const [showProfileModal, setShowProfileModal] = useState(false);
 
@@ -36,7 +36,7 @@ export default function App() {
 
   const [questions, setQuestions] = useState([]);
   const [studyLogs, setStudyLogs] = useState(() => {
-    const saved = localStorage.getItem('study_app_logs_v3');
+    const saved = localStorage.getItem('study_app_logs_v4');
     return saved ? JSON.parse(saved) : [];
   });
 
@@ -55,12 +55,25 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('study_app_user_v3', JSON.stringify(userProfile));
+    localStorage.setItem('study_app_user_v4', JSON.stringify(userProfile));
   }, [userProfile]);
 
   useEffect(() => {
-    localStorage.setItem('study_app_logs_v3', JSON.stringify(studyLogs));
+    localStorage.setItem('study_app_logs_v4', JSON.stringify(studyLogs));
   }, [studyLogs]);
+
+  // カウントダウン日数の計算
+  const getDaysUntilTest = () => {
+    if (!userProfile.testDate) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tDate = new Date(userProfile.testDate);
+    const diffTime = tDate - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  };
+
+  const daysUntilTest = getDaysUntilTest();
 
   const handleCreateFolder = async (e) => {
     e.preventDefault();
@@ -112,18 +125,40 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-amber-50/40 text-stone-800 flex flex-col font-sans pb-24">
-      <header className="bg-white border-b border-amber-200 sticky top-0 z-30 shadow-sm p-4 flex justify-between items-center">
-        <div className="flex items-center gap-2 cursor-pointer" onClick={() => { setActiveTab('home'); setSelectedQuestionId(null); }}>
-          <div className="bg-amber-600 text-white p-2 rounded-xl"><BookOpen className="w-5 h-5" /></div>
-          <h1 className="font-extrabold text-lg">定期テスト予想問題</h1>
+    <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-100 text-stone-800 flex flex-col font-sans pb-24">
+      {/* 華やかなヘッダー */}
+      <header className="bg-gradient-to-r from-amber-400 via-orange-400 to-rose-400 sticky top-0 z-30 shadow-lg p-4 flex justify-between items-center rounded-b-2xl">
+        <div className="flex items-center gap-2 cursor-pointer text-white" onClick={() => { setActiveTab('home'); setSelectedQuestionId(null); }}>
+          <div className="bg-white/20 p-2 rounded-xl backdrop-blur-sm"><BookOpen className="w-5 h-5 text-white" /></div>
+          <h1 className="font-extrabold text-lg drop-shadow-md">YOSO<Sparkles className="inline w-4 h-4 ml-1 text-yellow-200" /></h1>
         </div>
-        <button onClick={() => setShowProfileModal(true)} className="bg-amber-100 px-3 py-1.5 rounded-full text-sm font-medium">
-          {userProfile?.avatar || '🎓'} {userProfile?.name || 'テスト対策生'}
+        <button onClick={() => setShowProfileModal(true)} className="bg-white/90 hover:bg-white text-orange-600 px-4 py-1.5 rounded-full text-sm font-bold shadow-md transition transform hover:scale-105">
+          {userProfile?.avatar || '🎓'} {userProfile?.name || '設定'}
         </button>
       </header>
 
       <main className="max-w-4xl mx-auto p-4 flex-1 w-full">
+        {/* カウントダウンバナー（ホーム画面のみ表示） */}
+        {activeTab === 'home' && !selectedQuestionId && (
+          <div onClick={() => setShowProfileModal(true)} className="mb-6 cursor-pointer bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 p-5 rounded-3xl shadow-xl text-white relative overflow-hidden transform transition hover:scale-[1.02]">
+            <div className="absolute top-0 right-0 p-4 opacity-20"><Calendar className="w-24 h-24" /></div>
+            <div className="relative z-10">
+              <h2 className="text-sm font-bold text-white/90 mb-1">定期テストまであと...</h2>
+              {daysUntilTest !== null ? (
+                daysUntilTest > 0 ? (
+                  <div className="text-4xl font-extrabold drop-shadow-lg">{daysUntilTest} <span className="text-xl">日</span></div>
+                ) : daysUntilTest === 0 ? (
+                  <div className="text-4xl font-extrabold drop-shadow-lg text-yellow-300">今日がテスト！🔥</div>
+                ) : (
+                  <div className="text-2xl font-extrabold drop-shadow-lg">テストお疲れ様！🎉</div>
+                )
+              ) : (
+                <div className="text-lg font-bold underline decoration-pink-300 underline-offset-4 mt-1">ここをタップしてテスト日程を設定！</div>
+              )}
+            </div>
+          </div>
+        )}
+
         {selectedQuestionId ? (
           <QuestionDetailView 
             question={questions.find(q => q.id === selectedQuestionId)} 
@@ -166,31 +201,43 @@ export default function App() {
         )}
       </main>
 
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t p-2 z-30 flex justify-around">
-        <NavButton active={activeTab === 'home'} icon={<Home className="w-5 h-5" />} label="ホーム" onClick={() => { setActiveTab('home'); setSelectedQuestionId(null); }} />
-        <NavButton active={activeTab === 'create'} icon={<PlusCircle className="w-5 h-5" />} label="投稿する" onClick={() => { setActiveTab('create'); setSelectedQuestionId(null); }} />
-        <NavButton active={activeTab === 'timer'} icon={<Clock className="w-5 h-5" />} label="タイマー" onClick={() => { setActiveTab('timer'); setSelectedQuestionId(null); }} />
-        <NavButton active={activeTab === 'records'} icon={<BarChart2 className="w-5 h-5" />} label="分析・記録" onClick={() => { setActiveTab('records'); setSelectedQuestionId(null); }} />
+      <nav className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-amber-100 p-2 z-30 flex justify-around shadow-[0_-4px_10px_rgba(0,0,0,0.05)] rounded-t-2xl">
+        <NavButton active={activeTab === 'home'} icon={<Home className="w-6 h-6" />} label="ホーム" onClick={() => { setActiveTab('home'); setSelectedQuestionId(null); }} />
+        <NavButton active={activeTab === 'create'} icon={<PlusCircle className="w-6 h-6" />} label="投稿" onClick={() => { setActiveTab('create'); setSelectedQuestionId(null); }} />
+        <NavButton active={activeTab === 'timer'} icon={<Clock className="w-6 h-6" />} label="タイマー" onClick={() => { setActiveTab('timer'); setSelectedQuestionId(null); }} />
+        <NavButton active={activeTab === 'records'} icon={<BarChart2 className="w-6 h-6" />} label="記録" onClick={() => { setActiveTab('records'); setSelectedQuestionId(null); }} />
       </nav>
 
+      {/* プロフィール＆日程設定モーダル */}
       {showProfileModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-          <div className="bg-white p-6 rounded-2xl max-w-sm w-full space-y-4">
-            <h3 className="font-bold">プロフィール設定</h3>
-            <input type="text" value={userProfile?.name || ''} onChange={(e) => setUserProfile({ ...userProfile, name: e.target.value })} className="w-full border p-2 rounded-xl text-sm" />
-            <button onClick={() => setShowProfileModal(false)} className="w-full bg-amber-600 text-white py-2 rounded-xl text-xs font-bold">保存する</button>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white p-6 rounded-3xl max-w-sm w-full space-y-5 shadow-2xl transform transition-all">
+            <h3 className="font-extrabold text-xl text-center text-amber-900 border-b pb-3">設定</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-stone-500 mb-1 block">ニックネーム</label>
+                <input type="text" value={userProfile?.name || ''} onChange={(e) => setUserProfile({ ...userProfile, name: e.target.value })} className="w-full bg-stone-50 border-2 border-stone-200 focus:border-amber-400 p-3 rounded-xl text-sm outline-none font-bold transition" />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-stone-500 mb-1 block">テスト日程 (カウントダウン用)</label>
+                <input type="date" value={userProfile?.testDate || ''} onChange={(e) => setUserProfile({ ...userProfile, testDate: e.target.value })} className="w-full bg-stone-50 border-2 border-stone-200 focus:border-indigo-400 p-3 rounded-xl text-sm outline-none font-bold transition text-indigo-700" />
+              </div>
+            </div>
+            <button onClick={() => setShowProfileModal(false)} className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white py-3 rounded-xl text-sm font-extrabold shadow-lg transition transform hover:scale-105">
+              保存して閉じる
+            </button>
           </div>
         </div>
       )}
 
       {showFolderModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-          <form onSubmit={handleCreateFolder} className="bg-white p-6 rounded-2xl max-w-sm w-full space-y-4">
-            <h3 className="font-bold">新規フォルダ作成</h3>
-            <input type="text" required value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} placeholder="フォルダ名" className="w-full border p-2 rounded-xl text-sm" />
-            <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => setShowFolderModal(false)} className="px-3 py-1 text-sm">キャンセル</button>
-              <button type="submit" className="bg-amber-600 text-white px-4 py-1 rounded-xl text-sm">作成</button>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <form onSubmit={handleCreateFolder} className="bg-white p-6 rounded-3xl max-w-sm w-full space-y-4 shadow-2xl">
+            <h3 className="font-extrabold text-lg text-amber-900">新規フォルダ作成</h3>
+            <input type="text" required value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} placeholder="フォルダ名を入力" className="w-full bg-stone-50 border-2 border-stone-200 focus:border-amber-400 p-3 rounded-xl text-sm outline-none transition font-bold" />
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setShowFolderModal(false)} className="px-4 py-2 text-sm font-bold text-stone-500 hover:bg-stone-100 rounded-xl transition">キャンセル</button>
+              <button type="submit" className="bg-amber-500 hover:bg-amber-600 text-white px-5 py-2 rounded-xl text-sm font-bold shadow-md transition transform hover:scale-105">作成</button>
             </div>
           </form>
         </div>
@@ -201,9 +248,9 @@ export default function App() {
 
 function NavButton({ active, icon, label, onClick }) {
   return (
-    <button onClick={onClick} className={`flex flex-col items-center text-xs ${active ? 'text-amber-700 font-bold' : 'text-stone-400'}`}>
-      {icon}
-      <span>{label}</span>
+    <button onClick={onClick} className={`flex flex-col items-center justify-center w-16 h-14 rounded-2xl transition-all ${active ? 'bg-amber-100 text-amber-700 font-extrabold shadow-inner' : 'text-stone-400 hover:bg-stone-50 hover:text-stone-600'}`}>
+      <div className={`${active ? 'transform scale-110 mb-0.5' : 'mb-1'} transition-transform`}>{icon}</div>
+      <span className="text-[10px]">{label}</span>
     </button>
   );
 }
@@ -248,36 +295,38 @@ function CreateQuestionView({ folders, defaultFolderId, userProfile, onSuccess }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white p-6 rounded-2xl space-y-4 shadow-sm border border-stone-200 max-w-2xl mx-auto">
-      <h2 className="text-lg font-bold flex items-center gap-2"><PlusCircle className="w-5 h-5 text-amber-600" /> 予想問題を投稿</h2>
-      <div>
-        <label className="text-xs text-stone-500">フォルダ</label>
-        <select value={folderId} onChange={(e) => setFolderId(e.target.value)} className="w-full border p-2 rounded-xl text-sm">{folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select>
+    <form onSubmit={handleSubmit} className="bg-white p-6 rounded-3xl space-y-5 shadow-xl border border-amber-100 max-w-2xl mx-auto">
+      <h2 className="text-xl font-extrabold flex items-center gap-2 text-amber-900"><PlusCircle className="w-6 h-6 text-orange-500" /> 問題をつくる</h2>
+      <div className="bg-stone-50 p-4 rounded-2xl space-y-4 border border-stone-100">
+        <div>
+          <label className="text-xs font-bold text-stone-500 mb-1 block">フォルダ</label>
+          <select value={folderId} onChange={(e) => setFolderId(e.target.value)} className="w-full border-2 border-stone-200 focus:border-amber-400 p-2.5 rounded-xl text-sm bg-white font-bold outline-none">{folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select>
+        </div>
+        <div>
+          <label className="text-xs font-bold text-stone-500 mb-1 block">教科</label>
+          <select value={subject} onChange={(e) => setSubject(e.target.value)} className="w-full border-2 border-stone-200 focus:border-amber-400 p-2.5 rounded-xl text-sm bg-white font-bold outline-none">{SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}</select>
+        </div>
+        <div>
+          <label className="text-xs font-bold text-stone-500 mb-1 block">タイトル</label>
+          <input type="text" required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="例: 中間テスト対策 漢字10問" className="w-full border-2 border-stone-200 focus:border-amber-400 p-2.5 rounded-xl text-sm bg-white font-bold outline-none" />
+        </div>
       </div>
-      <div>
-        <label className="text-xs text-stone-500">教科</label>
-        <select value={subject} onChange={(e) => setSubject(e.target.value)} className="w-full border p-2 rounded-xl text-sm">{SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}</select>
-      </div>
-      <div>
-        <label className="text-xs text-stone-500">タイトル</label>
-        <input type="text" required value={title} onChange={(e) => setTitle(e.target.value)} className="w-full border p-2 rounded-xl text-sm" />
-      </div>
-      <div className="space-y-2">
-        <label className="text-xs text-stone-500">問題と解答</label>
+      <div className="space-y-3">
+        <label className="text-sm font-extrabold text-amber-900 block">問題と解答</label>
         {subQuestions.map((sq, i) => (
-          <div key={i} className="p-3 bg-stone-50 rounded-xl space-y-1 border">
-            <input type="text" value={sq.question} onChange={(e) => handleSubQuestionChange(i, 'question', e.target.value)} placeholder="問題" className="w-full border p-1.5 rounded text-xs bg-white" />
-            <input type="text" value={sq.answer} onChange={(e) => handleSubQuestionChange(i, 'answer', e.target.value)} placeholder="解答" className="w-full border p-1.5 rounded text-xs bg-white" />
+          <div key={i} className="p-4 bg-orange-50/50 rounded-2xl space-y-2 border border-orange-100 shadow-sm relative">
+            <div className="absolute top-2 right-2 text-xs font-bold text-orange-300">Q{i+1}</div>
+            <input type="text" value={sq.question} onChange={(e) => handleSubQuestionChange(i, 'question', e.target.value)} placeholder="問題を入力" className="w-full border-2 border-orange-100 focus:border-orange-400 p-2.5 rounded-xl text-sm bg-white font-bold outline-none" />
+            <input type="text" value={sq.answer} onChange={(e) => handleSubQuestionChange(i, 'answer', e.target.value)} placeholder="解答を入力" className="w-full border-2 border-rose-100 focus:border-rose-400 p-2.5 rounded-xl text-sm bg-white font-bold outline-none text-rose-700" />
           </div>
         ))}
-        <button type="button" onClick={() => setSubQuestions([...subQuestions, { question: '', answer: '' }])} className="w-full py-1 border border-dashed border-amber-400 text-amber-800 rounded-xl text-xs">+ 問題を追加</button>
+        <button type="button" onClick={() => setSubQuestions([...subQuestions, { question: '', answer: '' }])} className="w-full py-3 border-2 border-dashed border-amber-300 text-amber-700 hover:bg-amber-50 rounded-2xl text-sm font-bold transition">+ 問題を追加する</button>
       </div>
-      <button type="submit" className="w-full bg-amber-600 text-white py-2.5 rounded-xl text-sm font-bold">公開する</button>
+      <button type="submit" className="w-full bg-gradient-to-r from-orange-400 to-rose-400 hover:from-orange-500 hover:to-rose-500 text-white py-3.5 rounded-2xl text-base font-extrabold shadow-lg transition transform hover:scale-[1.02]">公開する🚀</button>
     </form>
   );
 }
 
-// === ここが答えを隠す機能が入った新しい部分 ===
 function QuestionDetailView({ question, onBack, onDelete, onAddComment }) {
   const [commentText, setCommentText] = useState('');
   const [showAnswers, setShowAnswers] = useState({});
@@ -290,27 +339,31 @@ function QuestionDetailView({ question, onBack, onDelete, onAddComment }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <button onClick={onBack} className="flex items-center gap-1 text-xs font-bold text-amber-700"><ArrowLeft className="w-4 h-4" /> 戻る</button>
-        <button onClick={() => onDelete(question.id)} className="flex items-center gap-1 text-xs font-bold text-rose-600 bg-rose-50 px-3 py-1 rounded-lg"><Trash2 className="w-3.5 h-3.5" /> 投稿を削除</button>
+      <div className="flex justify-between items-center mb-2">
+        <button onClick={onBack} className="flex items-center gap-1 text-sm font-bold text-amber-700 bg-white px-3 py-1.5 rounded-full shadow-sm hover:bg-amber-50 transition"><ArrowLeft className="w-4 h-4" /> 戻る</button>
+        <button onClick={() => onDelete(question.id)} className="flex items-center gap-1 text-xs font-bold text-rose-600 bg-white border border-rose-100 px-3 py-1.5 rounded-full shadow-sm hover:bg-rose-50 transition"><Trash2 className="w-3.5 h-3.5" /> 削除</button>
       </div>
-      <div className="bg-white p-5 rounded-2xl border border-stone-200 space-y-3">
-        <span className="text-xs font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded">{question.subject}</span>
-        <h2 className="text-lg font-bold">{question.title}</h2>
-        <p className="text-xs text-stone-400">投稿者: {question.author || '名無しユーザー'}</p>
-        <div className="space-y-2 pt-2 border-t">
+      <div className="bg-white p-6 rounded-3xl border border-stone-100 shadow-xl space-y-4 relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-amber-300 via-orange-300 to-rose-300"></div>
+        <div className="inline-block px-3 py-1 bg-gradient-to-r from-amber-100 to-orange-100 text-amber-800 text-xs font-extrabold rounded-lg shadow-sm">{question.subject}</div>
+        <h2 className="text-2xl font-extrabold text-stone-800">{question.title}</h2>
+        <p className="text-xs font-bold text-stone-400 flex items-center gap-1">作成者: <span className="text-stone-600">{question.author || '名無し'}</span></p>
+        
+        <div className="space-y-3 pt-4 border-t border-stone-100">
           {(question.subQuestions || []).map((sq, i) => (
-            <div key={i} className="p-3 bg-amber-50 rounded-xl">
-              <p className="font-bold text-xs">問{i+1}: {sq.question}</p>
-              <div className="mt-2">
+            <div key={i} className="p-4 bg-gradient-to-b from-stone-50 to-white border border-stone-200 rounded-2xl shadow-sm">
+              <p className="font-extrabold text-sm text-stone-700 mb-3"><span className="text-amber-500 mr-1">Q{i+1}.</span> {sq.question}</p>
+              <div>
                 {showAnswers[i] ? (
-                  <div className="space-y-2">
-                    <p className="text-xs text-amber-900 bg-white p-2 rounded border border-amber-200 font-bold">答: {sq.answer}</p>
-                    <button onClick={() => toggleAnswer(i)} className="text-[10px] text-stone-500 underline">答えを隠す</button>
+                  <div className="space-y-2 animate-fade-in">
+                    <div className="text-sm text-rose-700 bg-rose-50 p-3 rounded-xl border border-rose-200 font-extrabold shadow-inner flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-rose-400" /> {sq.answer}
+                    </div>
+                    <button onClick={() => toggleAnswer(i)} className="text-[11px] text-stone-400 font-bold underline hover:text-stone-600 pl-1">答えを隠す</button>
                   </div>
                 ) : (
-                  <button onClick={() => toggleAnswer(i)} className="text-xs bg-amber-200 hover:bg-amber-300 text-amber-900 px-3 py-1 rounded-lg font-bold transition">
-                    答えを見る
+                  <button onClick={() => toggleAnswer(i)} className="w-full py-2.5 bg-amber-100 hover:bg-amber-200 text-amber-800 rounded-xl text-sm font-extrabold shadow-sm transition transform hover:scale-[1.01] active:scale-95">
+                    答えを見る 👀
                   </button>
                 )}
               </div>
@@ -318,15 +371,17 @@ function QuestionDetailView({ question, onBack, onDelete, onAddComment }) {
           ))}
         </div>
       </div>
-      <div className="bg-white p-5 rounded-2xl border border-stone-200 space-y-3">
-        <h3 className="font-bold text-sm">コメント</h3>
+      
+      {/* コメント欄 */}
+      <div className="bg-white p-6 rounded-3xl border border-stone-100 shadow-lg space-y-4">
+        <h3 className="font-extrabold text-base text-stone-700 flex items-center gap-2">💬 コメント</h3>
         <div className="flex gap-2">
-          <input type="text" value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder="コメント..." className="flex-1 border p-2 rounded-xl text-xs" />
-          <button onClick={() => { if (commentText) { onAddComment(question.id, commentText); setCommentText(''); } }} className="bg-amber-600 text-white px-3 py-1 rounded-xl text-xs">送信</button>
+          <input type="text" value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder="応援や感想を書こう！" className="flex-1 bg-stone-50 border-2 border-stone-200 focus:border-amber-400 p-2.5 rounded-xl text-sm outline-none font-bold transition" />
+          <button onClick={() => { if (commentText) { onAddComment(question.id, commentText); setCommentText(''); } }} className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2.5 rounded-xl text-sm font-extrabold shadow-md transition transform hover:scale-105">送信</button>
         </div>
-        <div className="space-y-1 pt-2">
+        <div className="space-y-2 pt-2">
           {(question.comments || []).map(c => (
-            <div key={c.id} className="text-xs bg-stone-50 p-2 rounded-xl"><span className="font-bold">{c.user}: </span>{c.text}</div>
+            <div key={c.id} className="text-sm bg-stone-50 p-3 rounded-2xl border border-stone-100"><span className="font-extrabold text-amber-700 mr-2">{c.user}</span><span className="font-medium text-stone-600">{c.text}</span></div>
           ))}
         </div>
       </div>
@@ -336,31 +391,36 @@ function QuestionDetailView({ question, onBack, onDelete, onAddComment }) {
 
 function HomeView({ folders, questions, onSelectQuestion, onOpenFolderModal, onToggleLike }) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
-        <div className="flex justify-between items-center mb-3">
-          <h2 className="text-base font-bold">テスト対策フォルダ</h2>
-          <button onClick={onOpenFolderModal} className="text-xs text-amber-800 font-bold bg-amber-100 px-3 py-1.5 rounded-lg">フォルダを作成</button>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-extrabold text-stone-700 flex items-center gap-2"><FolderPlus className="w-5 h-5 text-amber-500" /> フォルダ</h2>
+          <button onClick={onOpenFolderModal} className="text-xs text-orange-700 font-extrabold bg-orange-100 hover:bg-orange-200 px-4 py-2 rounded-full shadow-sm transition">＋ 作成</button>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {folders.map(f => (
-            <div key={f.id} className="bg-white p-4 rounded-xl border border-stone-200">
-              <h3 className="font-bold text-sm">{f.name}</h3>
+            <div key={f.id} className="bg-white p-4 rounded-2xl border border-amber-100 shadow-md hover:shadow-lg transition cursor-pointer transform hover:-translate-y-1">
+              <FolderPlus className="w-8 h-8 text-amber-400 mb-2 opacity-80" />
+              <h3 className="font-extrabold text-sm text-stone-700 line-clamp-1">{f.name}</h3>
             </div>
           ))}
         </div>
       </div>
+
       <div>
-        <h2 className="text-base font-bold mb-3">最新の予想問題</h2>
-        <div className="space-y-3">
+        <h2 className="text-lg font-extrabold text-stone-700 mb-4 flex items-center gap-2"><Sparkles className="w-5 h-5 text-orange-400" /> みんなの予想問題</h2>
+        <div className="space-y-4">
           {questions.map(q => (
-            <div key={q.id} onClick={() => onSelectQuestion(q.id)} className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm cursor-pointer space-y-2">
-              <span className="text-xs font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded">{q.subject}</span>
-              <h3 className="font-bold text-base">{q.title}</h3>
-              <div className="flex justify-between items-center text-xs text-stone-500 border-t pt-2">
-                <span>投稿者: {q.author || '名無しユーザー'}</span>
-                <button onClick={(e) => { e.stopPropagation(); onToggleLike(q.id); }} className="flex items-center gap-1 font-semibold text-amber-700">
-                  <ThumbsUp className="w-3.5 h-3.5" /> {q.likes || 0}
+            <div key={q.id} onClick={() => onSelectQuestion(q.id)} className="bg-white p-5 rounded-3xl border border-stone-100 shadow-md hover:shadow-xl transition cursor-pointer space-y-3 relative overflow-hidden group">
+              <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-amber-400 to-rose-400 transform origin-top transition-transform scale-y-0 group-hover:scale-y-100"></div>
+              <div>
+                <span className="text-[10px] font-extrabold bg-amber-100 text-amber-800 px-2.5 py-1 rounded-md shadow-sm">{q.subject}</span>
+              </div>
+              <h3 className="font-extrabold text-lg text-stone-800 leading-tight">{q.title}</h3>
+              <div className="flex justify-between items-center text-xs border-t border-stone-100 pt-3 mt-1">
+                <span className="font-bold text-stone-400">作成: {q.author || '名無し'}</span>
+                <button onClick={(e) => { e.stopPropagation(); onToggleLike(q.id); }} className={`flex items-center gap-1.5 font-extrabold px-3 py-1.5 rounded-full transition ${q.likedByMe ? 'bg-rose-100 text-rose-600' : 'bg-stone-50 text-stone-500 hover:bg-rose-50 hover:text-rose-500'}`}>
+                  <ThumbsUp className="w-4 h-4" /> {q.likes || 0}
                 </button>
               </div>
             </div>
