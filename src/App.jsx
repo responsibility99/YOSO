@@ -19,7 +19,6 @@ const SUBJECTS = [
   '音楽', '英語１', '英語２'
 ];
 
-// やり込み要素！充実のバッジリスト
 const BADGES = [
   { id: 't1', icon: '🐣', name: 'ひよこ学習者', desc: 'タイマー記録1回', type: 'totalStudySessions', req: 1 },
   { id: 't2', icon: '⏱️', name: '時計の友', desc: 'タイマー記録5回', type: 'totalStudySessions', req: 5 },
@@ -43,7 +42,6 @@ export default function App() {
   const [selectedFolderId, setSelectedFolderId] = useState(null);
   const [selectedQuestionId, setSelectedQuestionId] = useState(null);
 
-  // プロフィールにXP、レベル、各種統計を追加
   const [userProfile, setUserProfile] = useState(() => {
     const saved = localStorage.getItem('study_app_user_v5');
     const defaultUid = 'user_' + Date.now() + Math.floor(Math.random()*1000);
@@ -59,13 +57,16 @@ export default function App() {
   const [newFolderName, setNewFolderName] = useState('');
   const [showFolderModal, setShowFolderModal] = useState(false);
 
+  // 手動記録用のStateを追加
+  const [showManualLogModal, setShowManualLogModal] = useState(false);
+  const [manualLog, setManualLog] = useState({ subject: SUBJECTS[0], minutes: 30 });
+
   const [questions, setQuestions] = useState([]);
   const [studyLogs, setStudyLogs] = useState(() => {
     const saved = localStorage.getItem('study_app_logs_v5');
     return saved ? JSON.parse(saved) : [];
   });
 
-  // ランキング用のユーザー一覧
   const [leaderboard, setLeaderboard] = useState([]);
 
   useEffect(() => {
@@ -82,7 +83,6 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // ランキングの取得
   useEffect(() => {
     const q = query(collection(db, 'users'), orderBy('xp', 'desc'), limit(30));
     const unsub = onSnapshot(q, (snapshot) => {
@@ -91,23 +91,20 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // プロフィールの保存とFirebase同期
   useEffect(() => {
     localStorage.setItem('study_app_user_v5', JSON.stringify(userProfile));
     localStorage.setItem('study_app_logs_v5', JSON.stringify(studyLogs));
     
-    // Firestoreにユーザー情報を同期（ランキング用）
     if (userProfile.uid) {
       const userRef = doc(db, 'users', userProfile.uid);
       setDoc(userRef, userProfile, { merge: true }).catch(e => console.error("Sync error:", e));
     }
   }, [userProfile, studyLogs]);
 
-  // 経験値(XP)を獲得する関数
   const gainXP = (amount, statToIncrement) => {
     setUserProfile(prev => {
       const newXp = (prev.xp || 0) + amount;
-      const newLevel = Math.floor(newXp / 100) + 1; // 100XPごとに1レベルアップ
+      const newLevel = Math.floor(newXp / 100) + 1;
       
       if (newLevel > prev.level) {
         setShowLevelUp(true);
@@ -115,9 +112,7 @@ export default function App() {
       }
 
       const updates = { xp: newXp, level: newLevel };
-      if (statToIncrement) {
-        updates[statToIncrement] = (prev[statToIncrement] || 0) + 1;
-      }
+      if (statToIncrement) updates[statToIncrement] = (prev[statToIncrement] || 0) + 1;
       return { ...prev, ...updates };
     });
   };
@@ -132,7 +127,6 @@ export default function App() {
   };
   const daysUntilTest = getDaysUntilTest();
 
-  // 現在獲得しているバッジを計算
   const earnedBadges = BADGES.filter(b => (userProfile[b.type] || 0) >= b.req);
 
   const handleCreateFolder = async (e) => {
@@ -166,13 +160,24 @@ export default function App() {
   const handleSaveStudyLog = (logData) => {
     const newLog = { id: 'log_' + Date.now(), ...logData };
     setStudyLogs([newLog, ...studyLogs]);
-    gainXP(30, 'totalStudySessions'); // 学習1回で30XP
+    gainXP(30, 'totalStudySessions');
     setActiveTab('records');
+  };
+
+  // 手動記録を送信する処理
+  const handleManualLogSubmit = (e) => {
+    e.preventDefault();
+    if (manualLog.minutes <= 0) return;
+    handleSaveStudyLog({
+      subject: manualLog.subject,
+      duration: manualLog.minutes * 60, // 秒に変換して保存
+      date: new Date().toLocaleDateString('ja-JP')
+    });
+    setShowManualLogModal(false);
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-100 text-stone-800 flex flex-col font-sans pb-24">
-      {/* レベルアップ通知 */}
       {showLevelUp && (
         <div className="fixed top-20 left-0 right-0 z-50 flex justify-center animate-bounce">
           <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-6 py-3 rounded-full shadow-2xl font-extrabold text-lg flex items-center gap-2 border-4 border-white">
@@ -211,7 +216,6 @@ export default function App() {
                 <div className="text-lg font-bold underline decoration-pink-300 underline-offset-4 mt-1">ここをタップしてテスト日程を設定！</div>
               )}
               
-              {/* XPプログレスバー */}
               <div className="mt-4">
                 <div className="flex justify-between text-xs font-bold mb-1">
                   <span>次のレベルまで</span>
@@ -235,7 +239,7 @@ export default function App() {
               if (!q) return;
               const newComments = [...(q.comments || []), { id: 'c_' + Date.now(), user: userProfile.name, text }];
               await updateDoc(doc(db, 'questions', qId), { comments: newComments });
-              gainXP(5, null); // コメントで5XP
+              gainXP(5, null);
             }}
           />
         ) : (
@@ -251,20 +255,26 @@ export default function App() {
             {activeTab === 'create' && (
               <CreateQuestionView 
                 folders={folders} defaultFolderId={selectedFolderId || (folders[0] ? folders[0].id : '')}
-                userProfile={userProfile}
-                onSuccess={() => { gainXP(50, 'totalPosts'); setActiveTab('home'); }} // 投稿で50XP
+                userProfile={userProfile} onSuccess={() => { gainXP(50, 'totalPosts'); setActiveTab('home'); }}
               />
             )}
             {activeTab === 'chat' && (
-              <ChatView userProfile={userProfile} onMessageSent={() => gainXP(10, 'totalChats')} /> // チャット送信で10XP
+              <ChatView userProfile={userProfile} onMessageSent={() => gainXP(10, 'totalChats')} />
             )}
             {activeTab === 'timer' && (
               <TimerView onSaveLog={handleSaveStudyLog} />
             )}
             {activeTab === 'records' && (
-              <RecordsView studyLogs={studyLogs} onClearLogs={() => setStudyLogs([])} />
+              <div className="space-y-4">
+                {/* 手動追加ボタンを記録タブに配置 */}
+                <div className="flex justify-end">
+                  <button onClick={() => setShowManualLogModal(true)} className="bg-gradient-to-r from-amber-400 to-orange-400 text-white hover:from-amber-500 hover:to-orange-500 text-sm font-extrabold px-5 py-2.5 rounded-full shadow-md transition transform hover:scale-105 flex items-center gap-1.5">
+                    <PlusCircle className="w-4 h-4" /> 手動で勉強記録を追加
+                  </button>
+                </div>
+                <RecordsView studyLogs={studyLogs} onClearLogs={() => setStudyLogs([])} />
+              </div>
             )}
-            {/* 新機能：ランキングタブ */}
             {activeTab === 'ranking' && (
               <RankingView leaderboard={leaderboard} currentUid={userProfile.uid} />
             )}
@@ -277,15 +287,40 @@ export default function App() {
         <NavButton active={activeTab === 'create'} icon={<PlusCircle className="w-6 h-6" />} label="投稿" onClick={() => { setActiveTab('create'); setSelectedQuestionId(null); }} />
         <NavButton active={activeTab === 'chat'} icon={<MessageCircle className="w-6 h-6" />} label="チャット" onClick={() => { setActiveTab('chat'); setSelectedQuestionId(null); }} />
         <NavButton active={activeTab === 'ranking'} icon={<Trophy className="w-6 h-6" />} label="ランキング" onClick={() => { setActiveTab('ranking'); setSelectedQuestionId(null); }} />
+        <NavButton active={activeTab === 'records'} icon={<BarChart2 className="w-6 h-6" />} label="記録" onClick={() => { setActiveTab('records'); setSelectedQuestionId(null); }} />
         <NavButton active={activeTab === 'timer'} icon={<Clock className="w-6 h-6" />} label="タイマー" onClick={() => { setActiveTab('timer'); setSelectedQuestionId(null); }} />
       </nav>
+
+      {/* 手動記録モーダル */}
+      {showManualLogModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <form onSubmit={handleManualLogSubmit} className="bg-white p-6 rounded-3xl max-w-sm w-full space-y-4 shadow-2xl">
+            <h3 className="font-extrabold text-lg text-amber-900 flex items-center gap-2">
+              <PlusCircle className="w-5 h-5 text-amber-500" /> 手動で記録を追加
+            </h3>
+            <div>
+              <label className="text-xs font-bold text-stone-500 mb-1 block">教科</label>
+              <select value={manualLog.subject} onChange={(e) => setManualLog({ ...manualLog, subject: e.target.value })} className="w-full border-2 border-stone-200 focus:border-amber-400 p-2.5 rounded-xl text-sm bg-white font-bold outline-none">
+                {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-bold text-stone-500 mb-1 block">勉強時間 (分)</label>
+              <input type="number" min="1" required value={manualLog.minutes} onChange={(e) => setManualLog({ ...manualLog, minutes: e.target.value })} placeholder="例: 60" className="w-full bg-stone-50 border-2 border-stone-200 focus:border-amber-400 p-3 rounded-xl text-sm outline-none transition font-bold" />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setShowManualLogModal(false)} className="px-4 py-2 text-sm font-bold text-stone-500 hover:bg-stone-100 rounded-xl transition">キャンセル</button>
+              <button type="submit" className="bg-amber-500 hover:bg-amber-600 text-white px-5 py-2 rounded-xl text-sm font-bold shadow-md transition transform hover:scale-105">記録する</button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* プロフィール＆バッジ確認モーダル */}
       {showProfileModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white p-6 rounded-3xl max-w-sm w-full shadow-2xl transform transition-all flex flex-col max-h-[85vh]">
             <h3 className="font-extrabold text-xl text-center text-amber-900 border-b pb-3 mb-4">マイプロフィール</h3>
-            
             <div className="overflow-y-auto pr-2 space-y-5 flex-1">
               <div className="flex items-center gap-4 bg-amber-50 p-4 rounded-2xl border border-amber-100">
                 <div className="text-4xl">{userProfile.avatar}</div>
@@ -296,7 +331,6 @@ export default function App() {
                   </div>
                 </div>
               </div>
-
               <div className="space-y-3">
                 <div>
                   <label className="text-xs font-bold text-stone-500 mb-1 block">ニックネーム</label>
@@ -311,8 +345,6 @@ export default function App() {
                   <input type="date" value={userProfile.testDate} onChange={(e) => setUserProfile({ ...userProfile, testDate: e.target.value })} className="w-full bg-stone-50 border-2 border-stone-200 focus:border-indigo-400 p-2.5 rounded-xl text-sm outline-none font-bold transition text-indigo-700" />
                 </div>
               </div>
-
-              {/* バッジコレクション */}
               <div className="pt-2">
                 <h4 className="font-extrabold text-sm text-stone-700 mb-2 flex items-center gap-1"><Trophy className="w-4 h-4 text-yellow-500" /> 獲得したバッジ ({earnedBadges.length}/{BADGES.length})</h4>
                 <div className="grid grid-cols-3 gap-2">
@@ -328,7 +360,6 @@ export default function App() {
                 </div>
               </div>
             </div>
-
             <button onClick={() => setShowProfileModal(false)} className="w-full mt-4 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white py-3 rounded-xl text-sm font-extrabold shadow-lg transition">
               保存して閉じる
             </button>
@@ -361,7 +392,6 @@ function NavButton({ active, icon, label, onClick }) {
   );
 }
 
-// === 新機能：ランキングビュー ===
 function RankingView({ leaderboard, currentUid }) {
   return (
     <div className="space-y-4">
@@ -380,12 +410,8 @@ function RankingView({ leaderboard, currentUid }) {
           return (
             <div key={user.uid} className={`flex items-center justify-between p-3 rounded-2xl border-2 ${rankColors} ${isMe ? 'ring-2 ring-amber-400' : ''}`}>
               <div className="flex items-center gap-3">
-                <div className={`w-8 font-extrabold text-lg text-center ${rankTextColors}`}>
-                  {index + 1}
-                </div>
-                <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-xl shadow-sm border border-stone-200">
-                  {user.avatar || '🎓'}
-                </div>
+                <div className={`w-8 font-extrabold text-lg text-center ${rankTextColors}`}>{index + 1}</div>
+                <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-xl shadow-sm border border-stone-200">{user.avatar || '🎓'}</div>
                 <div>
                   <div className="font-extrabold text-stone-800 text-sm flex items-center gap-2">
                     {user.name || '名無し'} {isMe && <span className="text-[10px] bg-amber-500 text-white px-2 py-0.5 rounded-full">あなた</span>}
@@ -404,7 +430,6 @@ function RankingView({ leaderboard, currentUid }) {
   );
 }
 
-// === チャット機能 ===
 function ChatView({ userProfile, onMessageSent }) {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
