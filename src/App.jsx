@@ -2,11 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   BookOpen, Clock, FolderPlus, ThumbsUp, 
   Home, PlusCircle, BarChart2, ArrowLeft, Trash2, Calendar, Sparkles,
-  MessageCircle, Send, Trophy, Medal, Flame, KeyRound, LogOut
+  MessageCircle, Send, Trophy, Medal, Flame, KeyRound, LogOut,
+  ImagePlus, X // ← 新規追加
 } from 'lucide-react';
 import { db } from './firebase';
 import { 
-  collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, serverTimestamp, setDoc, query, orderBy, limit 
+  collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, serverTimestamp, setDoc, query, orderBy
 } from 'firebase/firestore';
 import './index.css';
 
@@ -46,8 +47,6 @@ export default function App() {
   });
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showLevelUp, setShowLevelUp] = useState(false);
-  
-  // 合言葉入力用
   const [tempCode, setTempCode] = useState('');
 
   const [folders, setFolders] = useState([]);
@@ -62,7 +61,6 @@ export default function App() {
   });
   const [leaderboard, setLeaderboard] = useState([]);
 
-  // 合言葉に基づくデータ取得
   useEffect(() => {
     if (!userProfile.secretCode) return;
     const unsub = onSnapshot(collection(db, 'folders'), (snapshot) => {
@@ -149,7 +147,6 @@ export default function App() {
     setActiveTab('records');
   };
 
-  // 合言葉入力画面
   if (!userProfile.secretCode) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-amber-100 to-orange-200 flex items-center justify-center p-4">
@@ -341,6 +338,8 @@ function RankingView({ leaderboard, currentUid }) {
 function ChatView({ userProfile, onMessageSent }) {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
+  const [previewUrl, setPreviewUrl] = useState('');
+  const fileInputRef = useRef(null);
   const bottomRef = useRef(null);
 
   useEffect(() => {
@@ -355,33 +354,104 @@ function ChatView({ userProfile, onMessageSent }) {
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
+  // 画像圧縮とプレビュー生成 (Firestoreのデータサイズ制限対策)
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new window.Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 500; // 横幅を最大500pxにリサイズ
+        const scaleSize = MAX_WIDTH / img.width;
+        canvas.width = MAX_WIDTH;
+        canvas.height = img.height * scaleSize;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        setPreviewUrl(canvas.toDataURL('image/jpeg', 0.6)); // 画質を下げて圧縮
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSend = async (e) => {
     e.preventDefault();
-    if (!newMessage.trim()) return;
+    if (!newMessage.trim() && !previewUrl) return;
     try {
-      await addDoc(collection(db, 'chats'), { text: newMessage, user: userProfile.name, avatar: userProfile.avatar, uid: userProfile.uid, secretCode: userProfile.secretCode, createdAt: serverTimestamp() });
-      setNewMessage(''); onMessageSent();
-    } catch (err) {}
+      await addDoc(collection(db, 'chats'), { 
+        text: newMessage, 
+        imageUrl: previewUrl || null,
+        user: userProfile.name, 
+        avatar: userProfile.avatar, 
+        uid: userProfile.uid, 
+        secretCode: userProfile.secretCode, 
+        createdAt: serverTimestamp() 
+      });
+      setNewMessage('');
+      setPreviewUrl('');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      onMessageSent();
+    } catch (err) { alert('送信に失敗しました'); }
+  };
+
+  const handleDelete = async (msgId) => {
+    if (window.confirm('送信を取り消しますか？')) {
+      try {
+        await deleteDoc(doc(db, 'chats', msgId));
+      } catch (err) { alert('削除に失敗しました'); }
+    }
   };
 
   return (
     <div className="flex flex-col flex-1" style={{ maxHeight: 'calc(100vh - 180px)' }}>
       <h2 className="text-xl font-extrabold text-stone-700 flex items-center gap-2 mb-3"><MessageCircle className="w-6 h-6 text-amber-500" /> グループチャット</h2>
+      
+      {/* チャット履歴 */}
       <div className="flex-1 bg-stone-50/70 rounded-3xl border border-amber-100 p-4 overflow-y-auto space-y-4 shadow-inner">
         {messages.map(msg => (
-          <div key={msg.id} className={`flex gap-2 ${msg.uid === userProfile.uid ? 'flex-row-reverse' : 'flex-row'}`}>
-            <div className="w-9 h-9 bg-white rounded-full flex items-center justify-center shadow-sm border">{msg.avatar || '🎓'}</div>
+          <div key={msg.id} className={`flex gap-2 ${msg.uid === userProfile.uid ? 'flex-row-reverse' : 'flex-row'} group`}>
+            <div className="w-9 h-9 bg-white rounded-full flex items-center justify-center shadow-sm border flex-shrink-0">{msg.avatar || '🎓'}</div>
             <div className={`max-w-[75%] flex flex-col ${msg.uid === userProfile.uid ? 'items-end' : 'items-start'}`}>
-              <span className="text-[11px] font-bold text-stone-400 mb-1 px-1">{msg.user}</span>
-              <div className={`p-3 rounded-2xl text-sm font-bold shadow-sm ${msg.uid === userProfile.uid ? 'bg-amber-400 text-white rounded-tr-sm' : 'bg-white text-stone-700 rounded-tl-sm border'}`}>{msg.text}</div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[11px] font-bold text-stone-400 px-1">{msg.user}</span>
+                {/* 自分のメッセージのみ削除ボタンを表示 */}
+                {msg.uid === userProfile.uid && (
+                  <button onClick={() => handleDelete(msg.id)} className="text-stone-300 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+              <div className={`p-3 rounded-2xl text-sm font-bold shadow-sm ${msg.uid === userProfile.uid ? 'bg-amber-400 text-white rounded-tr-sm' : 'bg-white text-stone-700 rounded-tl-sm border'} space-y-2`}>
+                {msg.imageUrl && <img src={msg.imageUrl} alt="添付画像" className="rounded-xl max-w-full h-auto border border-black/10" />}
+                {msg.text && <div>{msg.text}</div>}
+              </div>
             </div>
           </div>
         ))}
         <div ref={bottomRef} />
       </div>
-      <form onSubmit={handleSend} className="mt-4 flex gap-2">
-        <input type="text" value={newMessage} onChange={e => setNewMessage(e.target.value)} placeholder="発言しよう！" className="flex-1 border-2 border-stone-200 p-3.5 rounded-2xl text-sm font-bold outline-none" />
-        <button type="submit" disabled={!newMessage.trim()} className="bg-amber-500 text-white p-3.5 rounded-2xl shadow-md"><Send className="w-5 h-5" /></button>
+
+      {/* 画像プレビュー領域 */}
+      {previewUrl && (
+        <div className="mt-3 relative inline-block">
+          <div className="bg-stone-200/50 p-2 rounded-2xl border-2 border-dashed border-stone-300 w-32 h-32 flex items-center justify-center overflow-hidden">
+            <img src={previewUrl} alt="Preview" className="max-w-full max-h-full object-contain" />
+          </div>
+          <button onClick={() => { setPreviewUrl(''); if(fileInputRef.current) fileInputRef.current.value=''; }} className="absolute -top-2 -right-2 bg-stone-700 text-white rounded-full p-1 shadow-md hover:bg-rose-500"><X className="w-4 h-4"/></button>
+        </div>
+      )}
+
+      {/* 入力フォーム */}
+      <form onSubmit={handleSend} className="mt-3 flex gap-2 items-center bg-white p-2 rounded-3xl shadow-sm border border-stone-200">
+        <label className="cursor-pointer text-stone-400 hover:text-amber-500 p-2 transition-colors">
+          <ImagePlus className="w-6 h-6" />
+          <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleImageChange} />
+        </label>
+        <input type="text" value={newMessage} onChange={e => setNewMessage(e.target.value)} placeholder="発言しよう！" className="flex-1 p-2 text-sm font-bold outline-none bg-transparent" />
+        <button type="submit" disabled={!newMessage.trim() && !previewUrl} className="bg-amber-500 disabled:bg-stone-300 text-white p-3 rounded-2xl shadow-md transition-colors"><Send className="w-5 h-5" /></button>
       </form>
     </div>
   );
