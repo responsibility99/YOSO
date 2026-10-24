@@ -57,7 +57,7 @@ export default function App() {
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'folders'), (snapshot) => {
-      const folderList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const folderList = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       setFolders(folderList);
     });
     return () => unsub();
@@ -65,7 +65,7 @@ export default function App() {
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'questions'), (snapshot) => {
-      const qList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const qList = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       setQuestions(qList);
     });
     return () => unsub();
@@ -108,8 +108,7 @@ export default function App() {
       setNewFolderDesc('');
       setShowFolderModal(false);
     } catch (err) {
-      console.error(err);
-      alert('フォルダの作成に失敗しました。');
+      alert('エラーが発生しました');
     }
   };
 
@@ -146,8 +145,7 @@ export default function App() {
       setDeleteConfirmQId(null);
       setSelectedQuestionId(null);
     } catch (err) {
-      console.error(err);
-      alert('削除に失敗しました。');
+      alert('削除できませんでした');
     }
   };
 
@@ -169,7 +167,7 @@ export default function App() {
     }
   };
 
-  const appUrl = window.location.href;
+  const appUrl = typeof window !== 'undefined' ? window.location.href : '';
 
   return (
     <div className="min-h-screen bg-amber-50/40 text-stone-800 flex flex-col font-sans pb-24 md:pb-8">
@@ -210,119 +208,4 @@ export default function App() {
       <main className="max-w-4xl mx-auto px-4 py-6 flex-1 w-full">
         {selectedQuestionId ? (
           <QuestionDetailView 
-            question={questions.find(q => q.id === selectedQuestionId)} 
-            onBack={() => setSelectedQuestionId(null)}
-            userProfile={userProfile}
-            onToggleLike={handleToggleLike}
-            onPromptDelete={(qId) => setDeleteConfirmQId(qId)}
-            onAddComment={async (qId, text) => {
-              const q = questions.find(item => item.id === qId);
-              if (!q) return;
-              const qRef = doc(db, 'questions', qId);
-              const newComments = [...(q.comments || []), {
-                id: 'c_' + Date.now(),
-                user: userProfile.name,
-                avatar: userProfile.avatar,
-                customAvatar: userProfile.customAvatar || null,
-                text,
-                time: 'たった今'
-              }];
-              await updateDoc(qRef, { comments: newComments });
-            }}
-          />
-        ) : selectedFolderId ? (
-          <FolderDetailView 
-            folder={folders.find(f => f.id === selectedFolderId)}
-            questions={questions.filter(q => q.folderId === selectedFolderId)}
-            onBack={() => setSelectedFolderId(null)}
-            onSelectQuestion={(qId) => setSelectedQuestionId(qId)}
-            onToggleLike={handleToggleLike}
-            onCreateInFolder={() => setActiveTab('create')}
-          />
-        ) : (
-          <>
-            {activeTab === 'home' && (
-              <HomeView 
-                examConfig={examConfig}
-                daysLeft={daysLeft}
-                setIsEditingExam={setIsEditingExam}
-                folders={folders}
-                questions={questions}
-                onSelectFolder={(id) => setSelectedFolderId(id)}
-                onSelectQuestion={(id) => setSelectedQuestionId(id)}
-                onOpenFolderModal={() => setShowFolderModal(true)}
-                onToggleLike={handleToggleLike}
-                onGoToCreate={() => setActiveTab('create')}
-              />
-            )}
-
-            {activeTab === 'create' && (
-              <CreateQuestionView 
-                folders={folders}
-                defaultFolderId={selectedFolderId || (folders[0] ? folders[0].id : '')}
-                userProfile={userProfile}
-                onOpenFolderModal={() => setShowFolderModal(true)}
-                onSuccess={(targetFolderId) => {
-                  setSelectedFolderId(targetFolderId);
-                  setActiveTab('home');
-                }}
-              />
-            )}
-
-            {activeTab === 'timer' && (
-              <TimerView onSaveLog={handleAddStudyLog} />
-            )}
-
-            {activeTab === 'records' && (
-              <EnhancedRecordsView studyLogs={studyLogs} onClearLogs={() => setStudyLogs([])} />
-            )}
-          </>
-        )}
-      </main>
-
-      <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-amber-200/80 z-30 shadow-lg">
-        <div className="max-w-md mx-auto flex justify-around py-2">
-          <NavButton 
-            active={activeTab === 'home' && !selectedFolderId && !selectedQuestionId} 
-            icon={<Home className="w-5 h-5" />} 
-            label="ホーム" 
-            onClick={() => { setActiveTab('home'); setSelectedFolderId(null); setSelectedQuestionId(null); }} 
-          />
-          <NavButton 
-            active={activeTab === 'create'} 
-            icon={<PlusCircle className="w-5 h-5" />} 
-            label="投稿する" 
-            onClick={() => { setActiveTab('create'); setSelectedFolderId(null); setSelectedQuestionId(null); }} 
-          />
-          <NavButton 
-            active={activeTab === 'timer'} 
-            icon={<Clock className="w-5 h-5" />} 
-            label="タイマー" 
-            onClick={() => { setActiveTab('timer'); setSelectedFolderId(null); setSelectedQuestionId(null); }} 
-          />
-          <NavButton 
-            active={activeTab === 'records'} 
-            icon={<BarChart2 className="w-5 h-5" />} 
-            label="分析・記録" 
-            onClick={() => { setActiveTab('records'); setSelectedFolderId(null); setSelectedQuestionId(null); }} 
-          />
-        </div>
-      </nav>
-
-      {showQrModal && (
-        <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl border border-amber-100 text-center space-y-4 relative">
-            <button 
-              onClick={() => setShowQrModal(false)}
-              className="absolute top-4 right-4 text-stone-400 hover:text-stone-600"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <h3 className="text-lg font-bold text-stone-800 flex items-center justify-center gap-2">
-              <QrCode className="w-5 h-5 text-amber-600" /> アプリを共有する
-            </h3>
-            <p className="text-xs text-stone-500">友達のスマホでこのQRコードを読み取ると、同じアプリを開けます！</p>
-            
-            <div className="flex justify-center py-2">
-              <img 
-                src={`
+            question={questions.find(q => q.id === selectedQuestionId)}
