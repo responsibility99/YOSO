@@ -1,4 +1,3 @@
-import './index.css';
 import React, { useState, useEffect } from 'react';
 import { 
   BookOpen, Clock, Calendar, FolderPlus, Plus, Search, ThumbsUp, 
@@ -7,15 +6,18 @@ import {
   Settings, Award, Sparkles, Filter, ShieldCheck, Edit3, Flame,
   TrendingUp, PieChart, Layers, CheckCircle2, Zap, AlertCircle, Camera, Image as ImageIcon
 } from 'lucide-react';
+import { db } from './firebase';
+import { 
+  collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, serverTimestamp, query, orderBy 
+} from 'firebase/firestore';
+import './index.css';
 
-// 13科目リスト
 const SUBJECTS = [
   '国語1', '国語２a', '国語２ｂ', '歴史', '地理', 
   '数学Ａ', '数学Ｂ', '化学', '生物', '地学', 
   '音楽', '英語１', '英語２'
 ];
 
-// グラフ用カラーパレット
 const SUBJECT_COLORS = [
   'bg-amber-500', 'bg-orange-500', 'bg-amber-600', 'bg-yellow-500', 'bg-emerald-500',
   'bg-teal-500', 'bg-cyan-500', 'bg-sky-500', 'bg-indigo-500', 'bg-violet-500',
@@ -39,25 +41,36 @@ export default function App() {
   });
   const [isEditingExam, setIsEditingExam] = useState(false);
 
-  const [folders, setFolders] = useState(() => {
-    const saved = localStorage.getItem('study_app_folders_v3');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [folders, setFolders] = useState([]);
   const [newFolderName, setNewFolderName] = useState('');
   const [newFolderDesc, setNewFolderDesc] = useState('');
   const [showFolderModal, setShowFolderModal] = useState(false);
 
-  const [questions, setQuestions] = useState(() => {
-    const saved = localStorage.getItem('study_app_questions_v3');
-    return saved ? JSON.parse(saved) : [];
-  });
-
+  const [questions, setQuestions] = useState([]);
   const [studyLogs, setStudyLogs] = useState(() => {
     const saved = localStorage.getItem('study_app_logs_v3');
     return saved ? JSON.parse(saved) : [];
   });
 
   const [deleteConfirmQId, setDeleteConfirmQId] = useState(null);
+
+  // Firestore リアルタイム同期（フォルダ）
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'folders'), (snapshot) => {
+      const folderList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setFolders(folderList);
+    });
+    return () => unsub();
+  }, []);
+
+  // Firestore リアルタイム同期（問題）
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'questions'), (snapshot) => {
+      const qList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setQuestions(qList);
+    });
+    return () => unsub();
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('study_app_user_v3', JSON.stringify(userProfile));
@@ -66,14 +79,6 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('study_app_exam_v3', JSON.stringify(examConfig));
   }, [examConfig]);
-
-  useEffect(() => {
-    localStorage.setItem('study_app_folders_v3', JSON.stringify(folders));
-  }, [folders]);
-
-  useEffect(() => {
-    localStorage.setItem('study_app_questions_v3', JSON.stringify(questions));
-  }, [questions]);
 
   useEffect(() => {
     localStorage.setItem('study_app_logs_v3', JSON.stringify(studyLogs));
@@ -90,15 +95,14 @@ export default function App() {
 
   const daysLeft = calculateDaysLeft(examConfig.date);
 
-  const handleCreateFolder = (e) => {
+  const handleCreateFolder = async (e) => {
     e.preventDefault();
     if (!newFolderName.trim()) return;
-    const newFolder = {
-      id: 'f_' + Date.now(),
+    await addDoc(collection(db, 'folders'), {
       name: newFolderName,
-      description: newFolderDesc || '教科書・テスト範囲のまとめ'
-    };
-    setFolders([...folders, newFolder]);
+      description: newFolderDesc || '教科書・テスト範囲のまとめ',
+      createdAt: serverTimestamp()
+    });
     setNewFolderName('');
     setNewFolderDesc('');
     setShowFolderModal(false);
@@ -116,21 +120,19 @@ export default function App() {
     setActiveTab('records');
   };
 
-  const handleToggleLike = (qId) => {
-    setQuestions(questions.map(q => {
-      if (q.id === qId) {
-        return {
-          ...q,
-          likes: q.likedByMe ? q.likes - 1 : q.likes + 1,
-          likedByMe: !q.likedByMe
-        };
-      }
-      return q;
-    }));
+  const handleToggleLike = async (qId) => {
+    const q = questions.find(item => item.id === qId);
+    if (!q) return;
+    const qRef = doc(db, 'questions', qId);
+    const isLiked = q.likedByMe;
+    await updateDoc(qRef, {
+      likes: isLiked ? (q.likes - 1) : (q.likes + 1),
+      likedByMe: !isLiked
+    });
   };
 
-  const handleDeleteQuestion = (qId) => {
-    setQuestions(questions.filter(q => q.id !== qId));
+  const handleDeleteQuestion = async (qId) => {
+    await deleteDoc(doc(db, 'questions', qId));
     setDeleteConfirmQId(null);
     setSelectedQuestionId(null);
   };
@@ -155,7 +157,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-amber-50/40 text-stone-800 flex flex-col font-sans pb-24 md:pb-8">
-      {/* トップヘッダー */}
       <header className="bg-white border-b border-amber-200/60 sticky top-0 z-30 shadow-sm">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
           <div 
@@ -167,7 +168,7 @@ export default function App() {
             </div>
             <div>
               <h1 className="font-extrabold text-lg text-stone-800 tracking-tight leading-none">定期テスト予想問題</h1>
-              <span className="text-xs text-amber-700 font-semibold">YOSO</span>
+              <span className="text-xs text-amber-700 font-semibold">YOSO (クラウド連携済)</span>
             </div>
           </div>
 
@@ -181,7 +182,6 @@ export default function App() {
         </div>
       </header>
 
-      {/* メインコンテンツ */}
       <main className="max-w-4xl mx-auto px-4 py-6 flex-1 w-full">
         {selectedQuestionId ? (
           <QuestionDetailView 
@@ -190,23 +190,19 @@ export default function App() {
             userProfile={userProfile}
             onToggleLike={handleToggleLike}
             onPromptDelete={(qId) => setDeleteConfirmQId(qId)}
-            onAddComment={(qId, text) => {
-              setQuestions(questions.map(q => {
-                if (q.id === qId) {
-                  return {
-                    ...q,
-                    comments: [...q.comments, {
-                      id: 'c_' + Date.now(),
-                      user: userProfile.name,
-                      avatar: userProfile.avatar,
-                      customAvatar: userProfile.customAvatar,
-                      text,
-                      time: 'たった今'
-                    }]
-                  };
-                }
-                return q;
-              }));
+            onAddComment={async (qId, text) => {
+              const q = questions.find(item => item.id === qId);
+              if (!q) return;
+              const qRef = doc(db, 'questions', qId);
+              const newComments = [...(q.comments || []), {
+                id: 'c_' + Date.now(),
+                user: userProfile.name,
+                avatar: userProfile.avatar,
+                customAvatar: userProfile.customAvatar || null,
+                text,
+                time: 'たった今'
+              }];
+              await updateDoc(qRef, { comments: newComments });
             }}
           />
         ) : selectedFolderId ? (
@@ -241,8 +237,11 @@ export default function App() {
                 defaultFolderId={selectedFolderId || (folders[0] ? folders[0].id : '')}
                 userProfile={userProfile}
                 onOpenFolderModal={() => setShowFolderModal(true)}
-                onSubmit={(newQ) => {
-                  setQuestions([newQ, ...questions]);
+                onSubmit={async (newQ) => {
+                  await addDoc(collection(db, 'questions'), {
+                    ...newQ,
+                    createdAt: new Date().toLocaleDateString('ja-JP')
+                  });
                   setSelectedFolderId(newQ.folderId);
                   setActiveTab('home');
                 }}
@@ -260,7 +259,6 @@ export default function App() {
         )}
       </main>
 
-      {/* フッターナビゲーションバー（スマホ用） */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-amber-200/80 z-30 shadow-lg">
         <div className="max-w-md mx-auto flex justify-around py-2">
           <NavButton 
@@ -290,7 +288,6 @@ export default function App() {
         </div>
       </nav>
 
-      {/* プロフィール設定モーダル */}
       {showProfileModal && (
         <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl border border-amber-100 space-y-4">
@@ -357,7 +354,6 @@ export default function App() {
         </div>
       )}
 
-      {/* 削除確認モーダル */}
       {deleteConfirmQId && (
         <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl border border-stone-100 space-y-4">
@@ -386,7 +382,6 @@ export default function App() {
         </div>
       )}
 
-      {/* テスト日程設定モーダル */}
       {isEditingExam && (
         <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl border border-amber-100 space-y-4">
@@ -422,7 +417,6 @@ export default function App() {
         </div>
       )}
 
-      {/* フォルダ作成モーダル */}
       {showFolderModal && (
         <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <form onSubmit={handleCreateFolder} className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl border border-amber-100 space-y-4">
@@ -506,7 +500,6 @@ function HomeView({ examConfig, daysLeft, setIsEditingExam, folders, questions, 
 
   return (
     <div className="space-y-6">
-      {/* カウントダウンカード */}
       <div className="bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 rounded-2xl p-5 text-white shadow-md relative overflow-hidden">
         <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
@@ -532,7 +525,6 @@ function HomeView({ examConfig, daysLeft, setIsEditingExam, folders, questions, 
         </div>
       </div>
 
-      {/* フォルダ一覧セクション */}
       <div>
         <div className="flex justify-between items-center mb-3">
           <h2 className="text-base font-bold text-stone-800 flex items-center gap-2">
@@ -588,7 +580,6 @@ function HomeView({ examConfig, daysLeft, setIsEditingExam, folders, questions, 
         )}
       </div>
 
-      {/* 最新問題一覧 */}
       <div>
         <h2 className="text-base font-bold text-stone-800 mb-3 flex items-center gap-2">
           <Sparkles className="w-5 h-5 text-amber-500" />
@@ -892,14 +883,12 @@ function CreateQuestionView({ folders, defaultFolderId, userProfile, onOpenFolde
     if (!title.trim() || !folderId) return;
 
     const newQuestion = {
-      id: 'q_' + Date.now(),
       folderId,
       subject,
       title,
       author: userProfile.name,
       avatar: userProfile.avatar,
-      customAvatar: userProfile.customAvatar,
-      createdAt: new Date().toLocaleDateString('ja-JP'),
+      customAvatar: userProfile.customAvatar || null,
       likes: 0,
       likedByMe: false,
       subQuestions,
