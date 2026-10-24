@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   BookOpen, Clock, FolderPlus, ThumbsUp, 
   Home, PlusCircle, BarChart2, ArrowLeft, Trash2, Calendar, Sparkles,
-  MessageCircle, Send, Trophy, Medal, Flame
+  MessageCircle, Send, Trophy, Medal, Flame, KeyRound, LogOut
 } from 'lucide-react';
 import { db } from './firebase';
 import { 
@@ -20,21 +20,15 @@ const SUBJECTS = [
 ];
 
 const BADGES = [
-  { id: 't1', icon: '🐣', name: 'ひよこ学習者', desc: 'タイマー記録1回', type: 'totalStudySessions', req: 1 },
+  { id: 't1', icon: '🐣', name: 'ひよこ', desc: 'タイマー記録1回', type: 'totalStudySessions', req: 1 },
   { id: 't2', icon: '⏱️', name: '時計の友', desc: 'タイマー記録5回', type: 'totalStudySessions', req: 5 },
   { id: 't3', icon: '🕰️', name: '時の支配者', desc: 'タイマー記録20回', type: 'totalStudySessions', req: 20 },
-  { id: 't4', icon: '🔥', name: '精神と時の部屋', desc: 'タイマー記録50回', type: 'totalStudySessions', req: 50 },
   { id: 'p1', icon: '🌱', name: '初投稿', desc: '問題を1回投稿', type: 'totalPosts', req: 1 },
   { id: 'p2', icon: '🛠️', name: '問題職人', desc: '問題を5回投稿', type: 'totalPosts', req: 5 },
-  { id: 'p3', icon: '👼', name: '予想の神様', desc: '問題を20回投稿', type: 'totalPosts', req: 20 },
-  { id: 'p4', icon: '👑', name: 'YOSOマスター', desc: '問題を50回投稿', type: 'totalPosts', req: 50 },
   { id: 'c1', icon: '👋', name: '初めまして', desc: 'チャット1回送信', type: 'totalChats', req: 1 },
   { id: 'c2', icon: '💬', name: 'おしゃべり', desc: 'チャット10回送信', type: 'totalChats', req: 10 },
-  { id: 'c3', icon: '🎉', name: 'ムードメーカー', desc: 'チャット50回送信', type: 'totalChats', req: 50 },
   { id: 'l1', icon: '🥉', name: 'ルーキー', desc: 'レベル5到達', type: 'level', req: 5 },
   { id: 'l2', icon: '🥈', name: 'チャレンジャー', desc: 'レベル10到達', type: 'level', req: 10 },
-  { id: 'l3', icon: '🥇', name: 'エリート', desc: 'レベル20到達', type: 'level', req: 20 },
-  { id: 'l4', icon: '💎', name: 'レジェンド', desc: 'レベル50到達', type: 'level', req: 50 },
 ];
 
 export default function App() {
@@ -43,61 +37,67 @@ export default function App() {
   const [selectedQuestionId, setSelectedQuestionId] = useState(null);
 
   const [userProfile, setUserProfile] = useState(() => {
-    const saved = localStorage.getItem('study_app_user_v5');
+    const saved = localStorage.getItem('study_app_user_v6');
     const defaultUid = 'user_' + Date.now() + Math.floor(Math.random()*1000);
     return saved ? JSON.parse(saved) : { 
       uid: defaultUid, name: 'テスト対策生', avatar: '🎓', testDate: '',
-      xp: 0, level: 1, totalStudySessions: 0, totalPosts: 0, totalChats: 0 
+      xp: 0, level: 1, totalStudySessions: 0, totalPosts: 0, totalChats: 0, secretCode: '' 
     };
   });
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showLevelUp, setShowLevelUp] = useState(false);
+  
+  // 合言葉入力用
+  const [tempCode, setTempCode] = useState('');
 
   const [folders, setFolders] = useState([]);
   const [newFolderName, setNewFolderName] = useState('');
   const [showFolderModal, setShowFolderModal] = useState(false);
-
-  // 手動記録用のStateを追加
   const [showManualLogModal, setShowManualLogModal] = useState(false);
   const [manualLog, setManualLog] = useState({ subject: SUBJECTS[0], minutes: 30 });
-
   const [questions, setQuestions] = useState([]);
   const [studyLogs, setStudyLogs] = useState(() => {
-    const saved = localStorage.getItem('study_app_logs_v5');
+    const saved = localStorage.getItem('study_app_logs_v6');
     return saved ? JSON.parse(saved) : [];
   });
-
   const [leaderboard, setLeaderboard] = useState([]);
 
+  // 合言葉に基づくデータ取得
   useEffect(() => {
+    if (!userProfile.secretCode) return;
     const unsub = onSnapshot(collection(db, 'folders'), (snapshot) => {
-      setFolders(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      setFolders(data.filter(d => d.secretCode === userProfile.secretCode));
     });
     return () => unsub();
-  }, []);
+  }, [userProfile.secretCode]);
 
   useEffect(() => {
+    if (!userProfile.secretCode) return;
     const unsub = onSnapshot(collection(db, 'questions'), (snapshot) => {
-      setQuestions(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      setQuestions(data.filter(d => d.secretCode === userProfile.secretCode));
     });
     return () => unsub();
-  }, []);
+  }, [userProfile.secretCode]);
 
   useEffect(() => {
-    const q = query(collection(db, 'users'), orderBy('xp', 'desc'), limit(30));
+    if (!userProfile.secretCode) return;
+    const q = query(collection(db, 'users'), orderBy('xp', 'desc'));
     const unsub = onSnapshot(q, (snapshot) => {
-      setLeaderboard(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      setLeaderboard(data.filter(d => d.secretCode === userProfile.secretCode).slice(0, 30));
     });
     return () => unsub();
-  }, []);
+  }, [userProfile.secretCode]);
 
   useEffect(() => {
-    localStorage.setItem('study_app_user_v5', JSON.stringify(userProfile));
-    localStorage.setItem('study_app_logs_v5', JSON.stringify(studyLogs));
+    localStorage.setItem('study_app_user_v6', JSON.stringify(userProfile));
+    localStorage.setItem('study_app_logs_v6', JSON.stringify(studyLogs));
     
-    if (userProfile.uid) {
+    if (userProfile.uid && userProfile.secretCode) {
       const userRef = doc(db, 'users', userProfile.uid);
-      setDoc(userRef, userProfile, { merge: true }).catch(e => console.error("Sync error:", e));
+      setDoc(userRef, userProfile, { merge: true }).catch(e => console.error(e));
     }
   }, [userProfile, studyLogs]);
 
@@ -105,12 +105,10 @@ export default function App() {
     setUserProfile(prev => {
       const newXp = (prev.xp || 0) + amount;
       const newLevel = Math.floor(newXp / 100) + 1;
-      
       if (newLevel > prev.level) {
         setShowLevelUp(true);
         setTimeout(() => setShowLevelUp(false), 3000);
       }
-
       const updates = { xp: newXp, level: newLevel };
       if (statToIncrement) updates[statToIncrement] = (prev[statToIncrement] || 0) + 1;
       return { ...prev, ...updates };
@@ -121,19 +119,17 @@ export default function App() {
     if (!userProfile.testDate) return null;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const tDate = new Date(userProfile.testDate);
-    const diffTime = tDate - today;
+    const diffTime = new Date(userProfile.testDate) - today;
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   };
   const daysUntilTest = getDaysUntilTest();
-
   const earnedBadges = BADGES.filter(b => (userProfile[b.type] || 0) >= b.req);
 
   const handleCreateFolder = async (e) => {
     e.preventDefault();
     if (!newFolderName.trim()) return;
     try {
-      await addDoc(collection(db, 'folders'), { name: newFolderName, createdAt: serverTimestamp() });
+      await addDoc(collection(db, 'folders'), { name: newFolderName, secretCode: userProfile.secretCode, createdAt: serverTimestamp() });
       setNewFolderName('');
       setShowFolderModal(false);
     } catch (err) {}
@@ -142,39 +138,35 @@ export default function App() {
   const handleToggleLike = async (qId) => {
     const q = questions.find(item => item.id === qId);
     if (!q) return;
-    const qRef = doc(db, 'questions', qId);
     try {
-      await updateDoc(qRef, { likes: q.likedByMe ? (q.likes - 1) : (q.likes + 1), likedByMe: !q.likedByMe });
+      await updateDoc(doc(db, 'questions', qId), { likes: q.likedByMe ? (q.likes - 1) : (q.likes + 1), likedByMe: !q.likedByMe });
     } catch (err) {}
   };
 
-  const handleDeleteQuestion = async (qId) => {
-    if (window.confirm('この予想問題を削除しますか？')) {
-      try {
-        await deleteDoc(doc(db, 'questions', qId));
-        setSelectedQuestionId(null);
-      } catch (err) {}
-    }
-  };
-
   const handleSaveStudyLog = (logData) => {
-    const newLog = { id: 'log_' + Date.now(), ...logData };
-    setStudyLogs([newLog, ...studyLogs]);
+    setStudyLogs([{ id: 'log_' + Date.now(), ...logData }, ...studyLogs]);
     gainXP(30, 'totalStudySessions');
     setActiveTab('records');
   };
 
-  // 手動記録を送信する処理
-  const handleManualLogSubmit = (e) => {
-    e.preventDefault();
-    if (manualLog.minutes <= 0) return;
-    handleSaveStudyLog({
-      subject: manualLog.subject,
-      duration: manualLog.minutes * 60, // 秒に変換して保存
-      date: new Date().toLocaleDateString('ja-JP')
-    });
-    setShowManualLogModal(false);
-  };
+  // 合言葉入力画面
+  if (!userProfile.secretCode) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-amber-100 to-orange-200 flex items-center justify-center p-4">
+        <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-sm w-full text-center space-y-6">
+          <div className="bg-amber-100 w-20 h-20 mx-auto rounded-full flex items-center justify-center mb-2">
+            <KeyRound className="w-10 h-10 text-amber-600" />
+          </div>
+          <h1 className="text-2xl font-extrabold text-stone-800">グループに参加</h1>
+          <p className="text-sm font-bold text-stone-500">仲間と同じ合言葉を入力して、<br/>専用の学習ルームに入ろう！</p>
+          <form onSubmit={(e) => { e.preventDefault(); if(tempCode.trim()) setUserProfile({...userProfile, secretCode: tempCode.trim()}); }}>
+            <input type="text" required value={tempCode} onChange={e => setTempCode(e.target.value)} placeholder="例: class2a" className="w-full border-2 border-stone-200 focus:border-amber-500 p-4 rounded-2xl text-center text-lg font-extrabold outline-none transition mb-4" />
+            <button type="submit" className="w-full bg-amber-500 hover:bg-amber-600 text-white py-4 rounded-2xl font-extrabold shadow-lg transition transform hover:scale-105">ルームに入る</button>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-100 text-stone-800 flex flex-col font-sans pb-24">
@@ -189,9 +181,8 @@ export default function App() {
       <header className="bg-gradient-to-r from-amber-400 via-orange-400 to-rose-400 sticky top-0 z-30 shadow-lg p-4 flex justify-between items-center rounded-b-2xl">
         <div className="flex items-center gap-2 cursor-pointer text-white" onClick={() => { setActiveTab('home'); setSelectedQuestionId(null); }}>
           <div className="bg-white/20 p-2 rounded-xl backdrop-blur-sm"><BookOpen className="w-5 h-5 text-white" /></div>
-          <h1 className="font-extrabold text-lg drop-shadow-md">YOSO<Sparkles className="inline w-4 h-4 ml-1 text-yellow-200" /></h1>
+          <h1 className="font-extrabold text-lg drop-shadow-md">YOSO</h1>
         </div>
-        
         <button onClick={() => setShowProfileModal(true)} className="bg-white/90 hover:bg-white text-stone-700 px-3 py-1.5 rounded-full text-sm font-bold shadow-md transition transform hover:scale-105 flex items-center gap-2">
           <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full text-[10px] font-extrabold">Lv.{userProfile.level}</span>
           <span>{userProfile.avatar} {userProfile.name}</span>
@@ -205,25 +196,13 @@ export default function App() {
             <div className="relative z-10">
               <h2 className="text-sm font-bold text-white/90 mb-1">定期テストまであと...</h2>
               {daysUntilTest !== null ? (
-                daysUntilTest > 0 ? (
-                  <div className="text-4xl font-extrabold drop-shadow-lg">{daysUntilTest} <span className="text-xl">日</span></div>
-                ) : daysUntilTest === 0 ? (
-                  <div className="text-4xl font-extrabold drop-shadow-lg text-yellow-300">今日がテスト！🔥</div>
-                ) : (
-                  <div className="text-2xl font-extrabold drop-shadow-lg">テストお疲れ様！🎉</div>
-                )
-              ) : (
-                <div className="text-lg font-bold underline decoration-pink-300 underline-offset-4 mt-1">ここをタップしてテスト日程を設定！</div>
-              )}
-              
+                daysUntilTest > 0 ? <div className="text-4xl font-extrabold drop-shadow-lg">{daysUntilTest} <span className="text-xl">日</span></div>
+                : daysUntilTest === 0 ? <div className="text-4xl font-extrabold drop-shadow-lg text-yellow-300">今日がテスト！🔥</div>
+                : <div className="text-2xl font-extrabold drop-shadow-lg">テストお疲れ様！🎉</div>
+              ) : <div className="text-lg font-bold underline decoration-pink-300 underline-offset-4 mt-1">ここをタップしてテスト日程を設定！</div>}
               <div className="mt-4">
-                <div className="flex justify-between text-xs font-bold mb-1">
-                  <span>次のレベルまで</span>
-                  <span>{userProfile.xp % 100} / 100 XP</span>
-                </div>
-                <div className="w-full bg-black/20 rounded-full h-2">
-                  <div className="bg-yellow-300 h-2 rounded-full transition-all duration-500" style={{ width: `${(userProfile.xp % 100)}%` }}></div>
-                </div>
+                <div className="flex justify-between text-xs font-bold mb-1"><span>次のレベルまで</span><span>{userProfile.xp % 100} / 100 XP</span></div>
+                <div className="w-full bg-black/20 rounded-full h-2"><div className="bg-yellow-300 h-2 rounded-full transition-all duration-500" style={{ width: `${(userProfile.xp % 100)}%` }}></div></div>
               </div>
             </div>
           </div>
@@ -233,51 +212,26 @@ export default function App() {
           <QuestionDetailView 
             question={questions.find(q => q.id === selectedQuestionId)} 
             onBack={() => setSelectedQuestionId(null)}
-            onDelete={handleDeleteQuestion}
+            onDelete={async (qId) => { if(window.confirm('削除しますか？')) { await deleteDoc(doc(db, 'questions', qId)); setSelectedQuestionId(null); } }}
             onAddComment={async (qId, text) => {
               const q = questions.find(item => item.id === qId);
-              if (!q) return;
-              const newComments = [...(q.comments || []), { id: 'c_' + Date.now(), user: userProfile.name, text }];
-              await updateDoc(doc(db, 'questions', qId), { comments: newComments });
+              await updateDoc(doc(db, 'questions', qId), { comments: [...(q.comments || []), { id: 'c_' + Date.now(), user: userProfile.name, text }] });
               gainXP(5, null);
             }}
           />
         ) : (
           <>
-            {activeTab === 'home' && (
-              <HomeView 
-                folders={folders} questions={questions}
-                onSelectQuestion={(id) => setSelectedQuestionId(id)}
-                onOpenFolderModal={() => setShowFolderModal(true)}
-                onToggleLike={handleToggleLike}
-              />
-            )}
-            {activeTab === 'create' && (
-              <CreateQuestionView 
-                folders={folders} defaultFolderId={selectedFolderId || (folders[0] ? folders[0].id : '')}
-                userProfile={userProfile} onSuccess={() => { gainXP(50, 'totalPosts'); setActiveTab('home'); }}
-              />
-            )}
-            {activeTab === 'chat' && (
-              <ChatView userProfile={userProfile} onMessageSent={() => gainXP(10, 'totalChats')} />
-            )}
-            {activeTab === 'timer' && (
-              <TimerView onSaveLog={handleSaveStudyLog} />
-            )}
+            {activeTab === 'home' && <HomeView folders={folders} questions={questions} onSelectQuestion={setSelectedQuestionId} onOpenFolderModal={() => setShowFolderModal(true)} onToggleLike={handleToggleLike} secretCode={userProfile.secretCode} />}
+            {activeTab === 'create' && <CreateQuestionView folders={folders} defaultFolderId={selectedFolderId || (folders[0]?.id || '')} userProfile={userProfile} onSuccess={() => { gainXP(50, 'totalPosts'); setActiveTab('home'); }} />}
+            {activeTab === 'chat' && <ChatView userProfile={userProfile} onMessageSent={() => gainXP(10, 'totalChats')} />}
+            {activeTab === 'timer' && <TimerView onSaveLog={handleSaveStudyLog} />}
             {activeTab === 'records' && (
               <div className="space-y-4">
-                {/* 手動追加ボタンを記録タブに配置 */}
-                <div className="flex justify-end">
-                  <button onClick={() => setShowManualLogModal(true)} className="bg-gradient-to-r from-amber-400 to-orange-400 text-white hover:from-amber-500 hover:to-orange-500 text-sm font-extrabold px-5 py-2.5 rounded-full shadow-md transition transform hover:scale-105 flex items-center gap-1.5">
-                    <PlusCircle className="w-4 h-4" /> 手動で勉強記録を追加
-                  </button>
-                </div>
+                <div className="flex justify-end"><button onClick={() => setShowManualLogModal(true)} className="bg-gradient-to-r from-amber-400 to-orange-400 text-white px-5 py-2.5 rounded-full shadow-md text-sm font-extrabold flex items-center gap-1.5"><PlusCircle className="w-4 h-4"/> 手動記録</button></div>
                 <RecordsView studyLogs={studyLogs} onClearLogs={() => setStudyLogs([])} />
               </div>
             )}
-            {activeTab === 'ranking' && (
-              <RankingView leaderboard={leaderboard} currentUid={userProfile.uid} />
-            )}
+            {activeTab === 'ranking' && <RankingView leaderboard={leaderboard} currentUid={userProfile.uid} />}
           </>
         )}
       </main>
@@ -294,88 +248,59 @@ export default function App() {
       {/* 手動記録モーダル */}
       {showManualLogModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <form onSubmit={handleManualLogSubmit} className="bg-white p-6 rounded-3xl max-w-sm w-full space-y-4 shadow-2xl">
-            <h3 className="font-extrabold text-lg text-amber-900 flex items-center gap-2">
-              <PlusCircle className="w-5 h-5 text-amber-500" /> 手動で記録を追加
-            </h3>
-            <div>
-              <label className="text-xs font-bold text-stone-500 mb-1 block">教科</label>
-              <select value={manualLog.subject} onChange={(e) => setManualLog({ ...manualLog, subject: e.target.value })} className="w-full border-2 border-stone-200 focus:border-amber-400 p-2.5 rounded-xl text-sm bg-white font-bold outline-none">
-                {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-bold text-stone-500 mb-1 block">勉強時間 (分)</label>
-              <input type="number" min="1" required value={manualLog.minutes} onChange={(e) => setManualLog({ ...manualLog, minutes: e.target.value })} placeholder="例: 60" className="w-full bg-stone-50 border-2 border-stone-200 focus:border-amber-400 p-3 rounded-xl text-sm outline-none transition font-bold" />
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setShowManualLogModal(false)} className="px-4 py-2 text-sm font-bold text-stone-500 hover:bg-stone-100 rounded-xl transition">キャンセル</button>
-              <button type="submit" className="bg-amber-500 hover:bg-amber-600 text-white px-5 py-2 rounded-xl text-sm font-bold shadow-md transition transform hover:scale-105">記録する</button>
-            </div>
+          <form onSubmit={(e) => { e.preventDefault(); handleSaveStudyLog({ subject: manualLog.subject, duration: manualLog.minutes * 60, date: new Date().toLocaleDateString('ja-JP') }); setShowManualLogModal(false); }} className="bg-white p-6 rounded-3xl max-w-sm w-full space-y-4 shadow-2xl">
+            <h3 className="font-extrabold text-lg text-amber-900">手動で記録を追加</h3>
+            <select value={manualLog.subject} onChange={e => setManualLog({ ...manualLog, subject: e.target.value })} className="w-full border-2 border-stone-200 p-2.5 rounded-xl text-sm font-bold outline-none">{SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}</select>
+            <input type="number" min="1" required value={manualLog.minutes} onChange={e => setManualLog({ ...manualLog, minutes: e.target.value })} placeholder="分数" className="w-full border-2 border-stone-200 p-3 rounded-xl text-sm font-bold outline-none" />
+            <div className="flex justify-end gap-2"><button type="button" onClick={() => setShowManualLogModal(false)} className="px-4 py-2 text-sm font-bold text-stone-500">キャンセル</button><button type="submit" className="bg-amber-500 text-white px-5 py-2 rounded-xl text-sm font-bold shadow-md">記録</button></div>
           </form>
         </div>
       )}
 
-      {/* プロフィール＆バッジ確認モーダル */}
+      {/* プロフィールモーダル */}
       {showProfileModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white p-6 rounded-3xl max-w-sm w-full shadow-2xl transform transition-all flex flex-col max-h-[85vh]">
+          <div className="bg-white p-6 rounded-3xl max-w-sm w-full shadow-2xl flex flex-col max-h-[85vh]">
             <h3 className="font-extrabold text-xl text-center text-amber-900 border-b pb-3 mb-4">マイプロフィール</h3>
             <div className="overflow-y-auto pr-2 space-y-5 flex-1">
               <div className="flex items-center gap-4 bg-amber-50 p-4 rounded-2xl border border-amber-100">
                 <div className="text-4xl">{userProfile.avatar}</div>
                 <div>
                   <div className="font-extrabold text-lg text-stone-800">{userProfile.name}</div>
-                  <div className="text-sm font-bold text-amber-600 flex items-center gap-1">
-                    <Medal className="w-4 h-4" /> レベル {userProfile.level} (累計 {userProfile.xp} XP)
-                  </div>
+                  <div className="text-sm font-bold text-amber-600 flex items-center gap-1"><Medal className="w-4 h-4" /> レベル {userProfile.level} ({userProfile.xp} XP)</div>
                 </div>
               </div>
               <div className="space-y-3">
-                <div>
-                  <label className="text-xs font-bold text-stone-500 mb-1 block">ニックネーム</label>
-                  <input type="text" value={userProfile.name} onChange={(e) => setUserProfile({ ...userProfile, name: e.target.value })} className="w-full bg-stone-50 border-2 border-stone-200 focus:border-amber-400 p-2.5 rounded-xl text-sm outline-none font-bold transition" />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-stone-500 mb-1 block">アイコン (絵文字)</label>
-                  <input type="text" value={userProfile.avatar} onChange={(e) => setUserProfile({ ...userProfile, avatar: e.target.value })} className="w-full bg-stone-50 border-2 border-stone-200 focus:border-amber-400 p-2.5 rounded-xl text-sm outline-none font-bold transition" />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-stone-500 mb-1 block">テスト日程</label>
-                  <input type="date" value={userProfile.testDate} onChange={(e) => setUserProfile({ ...userProfile, testDate: e.target.value })} className="w-full bg-stone-50 border-2 border-stone-200 focus:border-indigo-400 p-2.5 rounded-xl text-sm outline-none font-bold transition text-indigo-700" />
-                </div>
+                <div><label className="text-xs font-bold text-stone-500 mb-1 block">ニックネーム</label><input type="text" value={userProfile.name} onChange={e => setUserProfile({ ...userProfile, name: e.target.value })} className="w-full bg-stone-50 border-2 border-stone-200 p-2.5 rounded-xl text-sm outline-none font-bold" /></div>
+                <div><label className="text-xs font-bold text-stone-500 mb-1 block">アイコン (絵文字)</label><input type="text" value={userProfile.avatar} onChange={e => setUserProfile({ ...userProfile, avatar: e.target.value })} className="w-full bg-stone-50 border-2 border-stone-200 p-2.5 rounded-xl text-sm outline-none font-bold" /></div>
+                <div><label className="text-xs font-bold text-stone-500 mb-1 block">テスト日程</label><input type="date" value={userProfile.testDate} onChange={e => setUserProfile({ ...userProfile, testDate: e.target.value })} className="w-full bg-stone-50 border-2 border-stone-200 p-2.5 rounded-xl text-sm outline-none font-bold text-indigo-700" /></div>
               </div>
               <div className="pt-2">
                 <h4 className="font-extrabold text-sm text-stone-700 mb-2 flex items-center gap-1"><Trophy className="w-4 h-4 text-yellow-500" /> 獲得したバッジ ({earnedBadges.length}/{BADGES.length})</h4>
                 <div className="grid grid-cols-3 gap-2">
-                  {BADGES.map(badge => {
-                    const isEarned = (userProfile[badge.type] || 0) >= badge.req;
-                    return (
-                      <div key={badge.id} className={`flex flex-col items-center justify-center p-2 rounded-xl text-center border-2 transition-all ${isEarned ? 'bg-yellow-50 border-yellow-200 shadow-sm' : 'bg-stone-50 border-stone-100 opacity-40 grayscale'}`}>
-                        <div className="text-2xl mb-1">{badge.icon}</div>
-                        <div className="text-[9px] font-extrabold text-stone-700 leading-tight">{badge.name}</div>
-                      </div>
-                    );
-                  })}
+                  {BADGES.map(b => (
+                    <div key={b.id} className={`flex flex-col items-center justify-center p-2 rounded-xl text-center border-2 ${((userProfile[b.type] || 0) >= b.req) ? 'bg-yellow-50 border-yellow-200 shadow-sm' : 'bg-stone-50 border-stone-100 opacity-40 grayscale'}`}>
+                      <div className="text-2xl mb-1">{b.icon}</div><div className="text-[9px] font-extrabold text-stone-700 leading-tight">{b.name}</div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
-            <button onClick={() => setShowProfileModal(false)} className="w-full mt-4 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white py-3 rounded-xl text-sm font-extrabold shadow-lg transition">
-              保存して閉じる
-            </button>
+            <div className="mt-4 pt-3 border-t flex flex-col gap-2">
+              <button onClick={() => setShowProfileModal(false)} className="w-full bg-amber-500 text-white py-3 rounded-xl text-sm font-extrabold shadow-lg">保存して閉じる</button>
+              <button onClick={() => { if(window.confirm('グループから退出しますか？')) { setUserProfile({...userProfile, secretCode: ''}); setShowProfileModal(false); } }} className="w-full py-2 text-xs font-bold text-rose-500 flex justify-center items-center gap-1"><LogOut className="w-4 h-4"/> 別の合言葉に変更する</button>
+            </div>
           </div>
         </div>
       )}
 
+      {/* フォルダ作成モーダル */}
       {showFolderModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <form onSubmit={handleCreateFolder} className="bg-white p-6 rounded-3xl max-w-sm w-full space-y-4 shadow-2xl">
             <h3 className="font-extrabold text-lg text-amber-900">新規フォルダ作成</h3>
-            <input type="text" required value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} placeholder="フォルダ名を入力" className="w-full bg-stone-50 border-2 border-stone-200 focus:border-amber-400 p-3 rounded-xl text-sm outline-none transition font-bold" />
-            <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setShowFolderModal(false)} className="px-4 py-2 text-sm font-bold text-stone-500 hover:bg-stone-100 rounded-xl transition">キャンセル</button>
-              <button type="submit" className="bg-amber-500 hover:bg-amber-600 text-white px-5 py-2 rounded-xl text-sm font-bold shadow-md transition transform hover:scale-105">作成</button>
-            </div>
+            <input type="text" required value={newFolderName} onChange={e => setNewFolderName(e.target.value)} placeholder="フォルダ名" className="w-full border-2 border-stone-200 p-3 rounded-xl text-sm outline-none font-bold" />
+            <div className="flex justify-end gap-2"><button type="button" onClick={() => setShowFolderModal(false)} className="px-4 py-2 text-sm font-bold text-stone-500">キャンセル</button><button type="submit" className="bg-amber-500 text-white px-5 py-2 rounded-xl text-sm font-bold">作成</button></div>
           </form>
         </div>
       )}
@@ -385,7 +310,7 @@ export default function App() {
 
 function NavButton({ active, icon, label, onClick }) {
   return (
-    <button onClick={onClick} className={`flex flex-col items-center justify-center w-14 h-14 rounded-2xl transition-all ${active ? 'bg-amber-100 text-amber-700 font-extrabold shadow-inner' : 'text-stone-400 hover:bg-stone-50 hover:text-stone-600'}`}>
+    <button onClick={onClick} className={`flex flex-col items-center justify-center w-14 h-14 rounded-2xl transition-all ${active ? 'bg-amber-100 text-amber-700 font-extrabold shadow-inner' : 'text-stone-400 hover:bg-stone-50'}`}>
       <div className={`${active ? 'transform scale-110 mb-0.5' : 'mb-1'} transition-transform`}>{icon}</div>
       <span className="text-[9px]">{label}</span>
     </button>
@@ -395,36 +320,19 @@ function NavButton({ active, icon, label, onClick }) {
 function RankingView({ leaderboard, currentUid }) {
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2 mb-2 px-1">
-        <Trophy className="w-6 h-6 text-yellow-500" />
-        <h2 className="text-xl font-extrabold text-stone-700">全国ランキング</h2>
-      </div>
-      
+      <h2 className="text-xl font-extrabold text-stone-700 flex items-center gap-2"><Trophy className="w-6 h-6 text-yellow-500" /> グループ内ランキング</h2>
       <div className="bg-white rounded-3xl p-4 shadow-lg border border-amber-100 space-y-3">
         {leaderboard.length === 0 && <p className="text-stone-400 text-sm font-bold text-center py-4">データがありません</p>}
-        {leaderboard.map((user, index) => {
-          const isMe = user.uid === currentUid;
-          const rankColors = index === 0 ? 'bg-yellow-100 border-yellow-300' : index === 1 ? 'bg-gray-100 border-gray-300' : index === 2 ? 'bg-orange-100 border-orange-300' : 'bg-stone-50 border-stone-100';
-          const rankTextColors = index === 0 ? 'text-yellow-600' : index === 1 ? 'text-gray-500' : index === 2 ? 'text-orange-600' : 'text-stone-400';
-          
-          return (
-            <div key={user.uid} className={`flex items-center justify-between p-3 rounded-2xl border-2 ${rankColors} ${isMe ? 'ring-2 ring-amber-400' : ''}`}>
-              <div className="flex items-center gap-3">
-                <div className={`w-8 font-extrabold text-lg text-center ${rankTextColors}`}>{index + 1}</div>
-                <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-xl shadow-sm border border-stone-200">{user.avatar || '🎓'}</div>
-                <div>
-                  <div className="font-extrabold text-stone-800 text-sm flex items-center gap-2">
-                    {user.name || '名無し'} {isMe && <span className="text-[10px] bg-amber-500 text-white px-2 py-0.5 rounded-full">あなた</span>}
-                  </div>
-                  <div className="text-xs font-bold text-amber-600">Lv. {user.level || 1}</div>
-                </div>
-              </div>
-              <div className="font-extrabold text-stone-600 text-sm">
-                {user.xp || 0} <span className="text-[10px] text-stone-400">XP</span>
-              </div>
+        {leaderboard.map((user, index) => (
+          <div key={user.uid} className={`flex items-center justify-between p-3 rounded-2xl border-2 ${index===0?'bg-yellow-100 border-yellow-300':index===1?'bg-gray-100 border-gray-300':index===2?'bg-orange-100 border-orange-300':'bg-stone-50 border-stone-100'} ${user.uid===currentUid ? 'ring-2 ring-amber-400' : ''}`}>
+            <div className="flex items-center gap-3">
+              <div className="w-8 font-extrabold text-lg text-center">{index + 1}</div>
+              <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-xl">{user.avatar || '🎓'}</div>
+              <div><div className="font-extrabold text-sm">{user.name} {user.uid===currentUid && <span className="text-[10px] bg-amber-500 text-white px-2 rounded-full">あなた</span>}</div><div className="text-xs font-bold text-amber-600">Lv. {user.level || 1}</div></div>
             </div>
-          );
-        })}
+            <div className="font-extrabold text-sm">{user.xp || 0} XP</div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -436,58 +344,44 @@ function ChatView({ userProfile, onMessageSent }) {
   const bottomRef = useRef(null);
 
   useEffect(() => {
+    if (!userProfile.secretCode) return;
     const unsub = onSnapshot(collection(db, 'chats'), (snapshot) => {
-      let msgs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      let msgs = snapshot.docs.map(d => ({ id: d.id, ...d.data() })).filter(d => d.secretCode === userProfile.secretCode);
       msgs.sort((a, b) => (a.createdAt?.toMillis?.() || Date.now()) - (b.createdAt?.toMillis?.() || Date.now()));
       setMessages(msgs);
     });
     return () => unsub();
-  }, []);
+  }, [userProfile.secretCode]);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   const handleSend = async (e) => {
     e.preventDefault();
     if (!newMessage.trim()) return;
     try {
-      await addDoc(collection(db, 'chats'), {
-        text: newMessage, user: userProfile.name, avatar: userProfile.avatar, uid: userProfile.uid, createdAt: serverTimestamp()
-      });
-      setNewMessage('');
-      onMessageSent();
+      await addDoc(collection(db, 'chats'), { text: newMessage, user: userProfile.name, avatar: userProfile.avatar, uid: userProfile.uid, secretCode: userProfile.secretCode, createdAt: serverTimestamp() });
+      setNewMessage(''); onMessageSent();
     } catch (err) {}
   };
 
   return (
     <div className="flex flex-col flex-1" style={{ maxHeight: 'calc(100vh - 180px)' }}>
-      <div className="flex items-center gap-2 mb-3 px-1">
-        <MessageCircle className="w-6 h-6 text-amber-500" />
-        <h2 className="text-xl font-extrabold text-stone-700">みんなのチャット</h2>
-      </div>
-      
-      <div className="flex-1 bg-stone-50/70 rounded-3xl border border-amber-100 shadow-inner p-4 overflow-y-auto space-y-4">
-        {messages.map(msg => {
-          const isMe = msg.uid === userProfile.uid;
-          return (
-            <div key={msg.id} className={`flex gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
-              <div className="w-9 h-9 flex-shrink-0 bg-white rounded-full flex items-center justify-center shadow-sm text-lg border border-stone-200">{msg.avatar || '🎓'}</div>
-              <div className={`max-w-[75%] flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
-                <span className="text-[11px] font-bold text-stone-400 mb-1 px-1">{msg.user}</span>
-                <div className={`p-3 rounded-2xl text-sm font-bold shadow-sm ${isMe ? 'bg-gradient-to-br from-amber-400 to-orange-400 text-white rounded-tr-sm' : 'bg-white text-stone-700 rounded-tl-sm border border-stone-200'}`}>
-                  {msg.text}
-                </div>
-              </div>
+      <h2 className="text-xl font-extrabold text-stone-700 flex items-center gap-2 mb-3"><MessageCircle className="w-6 h-6 text-amber-500" /> グループチャット</h2>
+      <div className="flex-1 bg-stone-50/70 rounded-3xl border border-amber-100 p-4 overflow-y-auto space-y-4 shadow-inner">
+        {messages.map(msg => (
+          <div key={msg.id} className={`flex gap-2 ${msg.uid === userProfile.uid ? 'flex-row-reverse' : 'flex-row'}`}>
+            <div className="w-9 h-9 bg-white rounded-full flex items-center justify-center shadow-sm border">{msg.avatar || '🎓'}</div>
+            <div className={`max-w-[75%] flex flex-col ${msg.uid === userProfile.uid ? 'items-end' : 'items-start'}`}>
+              <span className="text-[11px] font-bold text-stone-400 mb-1 px-1">{msg.user}</span>
+              <div className={`p-3 rounded-2xl text-sm font-bold shadow-sm ${msg.uid === userProfile.uid ? 'bg-amber-400 text-white rounded-tr-sm' : 'bg-white text-stone-700 rounded-tl-sm border'}`}>{msg.text}</div>
             </div>
-          );
-        })}
+          </div>
+        ))}
         <div ref={bottomRef} />
       </div>
-
       <form onSubmit={handleSend} className="mt-4 flex gap-2">
-        <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="発言してXPをゲット！" className="flex-1 bg-white border-2 border-stone-200 focus:border-amber-400 p-3.5 rounded-2xl text-sm outline-none font-bold shadow-sm transition" />
-        <button type="submit" disabled={!newMessage.trim()} className="bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white p-3.5 rounded-2xl shadow-md transition transform hover:scale-105"><Send className="w-5 h-5" /></button>
+        <input type="text" value={newMessage} onChange={e => setNewMessage(e.target.value)} placeholder="発言しよう！" className="flex-1 border-2 border-stone-200 p-3.5 rounded-2xl text-sm font-bold outline-none" />
+        <button type="submit" disabled={!newMessage.trim()} className="bg-amber-500 text-white p-3.5 rounded-2xl shadow-md"><Send className="w-5 h-5" /></button>
       </form>
     </div>
   );
@@ -499,53 +393,37 @@ function CreateQuestionView({ folders, defaultFolderId, userProfile, onSuccess }
   const [title, setTitle] = useState('');
   const [subQuestions, setSubQuestions] = useState([{ question: '', answer: '' }]);
 
-  const handleSubQuestionChange = (index, field, value) => {
-    const updated = [...subQuestions];
-    updated[index][field] = value;
-    setSubQuestions(updated);
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!title.trim()) return;
     try {
       await addDoc(collection(db, 'questions'), {
-        folderId, subject, title, author: userProfile.name, avatar: userProfile.avatar, uid: userProfile.uid,
+        folderId, subject, title, author: userProfile.name, avatar: userProfile.avatar, uid: userProfile.uid, secretCode: userProfile.secretCode,
         likes: 0, likedByMe: false, subQuestions, comments: [], createdAt: new Date().toLocaleDateString('ja-JP')
       });
       onSuccess();
-    } catch (err) { alert('投稿に失敗しました'); }
+    } catch (err) { alert('投稿失敗'); }
   };
 
   return (
     <form onSubmit={handleSubmit} className="bg-white p-6 rounded-3xl space-y-5 shadow-xl border border-amber-100 max-w-2xl mx-auto">
       <h2 className="text-xl font-extrabold flex items-center gap-2 text-amber-900"><PlusCircle className="w-6 h-6 text-orange-500" /> 問題をつくる <span className="text-[10px] bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full">+50 XP</span></h2>
       <div className="bg-stone-50 p-4 rounded-2xl space-y-4 border border-stone-100">
-        <div>
-          <label className="text-xs font-bold text-stone-500 mb-1 block">フォルダ</label>
-          <select value={folderId} onChange={(e) => setFolderId(e.target.value)} className="w-full border-2 border-stone-200 focus:border-amber-400 p-2.5 rounded-xl text-sm bg-white font-bold outline-none">{folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select>
-        </div>
-        <div>
-          <label className="text-xs font-bold text-stone-500 mb-1 block">教科</label>
-          <select value={subject} onChange={(e) => setSubject(e.target.value)} className="w-full border-2 border-stone-200 focus:border-amber-400 p-2.5 rounded-xl text-sm bg-white font-bold outline-none">{SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}</select>
-        </div>
-        <div>
-          <label className="text-xs font-bold text-stone-500 mb-1 block">タイトル</label>
-          <input type="text" required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="例: 中間テスト対策 漢字10問" className="w-full border-2 border-stone-200 focus:border-amber-400 p-2.5 rounded-xl text-sm bg-white font-bold outline-none" />
-        </div>
+        <select value={folderId} onChange={e => setFolderId(e.target.value)} className="w-full border-2 border-stone-200 p-2.5 rounded-xl text-sm bg-white font-bold outline-none">{folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select>
+        <select value={subject} onChange={e => setSubject(e.target.value)} className="w-full border-2 border-stone-200 p-2.5 rounded-xl text-sm bg-white font-bold outline-none">{SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}</select>
+        <input type="text" required value={title} onChange={e => setTitle(e.target.value)} placeholder="タイトル (例: 中間テスト対策 漢字10問)" className="w-full border-2 border-stone-200 p-2.5 rounded-xl text-sm font-bold outline-none" />
       </div>
       <div className="space-y-3">
-        <label className="text-sm font-extrabold text-amber-900 block">問題と解答</label>
         {subQuestions.map((sq, i) => (
-          <div key={i} className="p-4 bg-orange-50/50 rounded-2xl space-y-2 border border-orange-100 shadow-sm relative">
+          <div key={i} className="p-4 bg-orange-50 rounded-2xl space-y-2 border relative">
             <div className="absolute top-2 right-2 text-xs font-bold text-orange-300">Q{i+1}</div>
-            <input type="text" value={sq.question} onChange={(e) => handleSubQuestionChange(i, 'question', e.target.value)} placeholder="問題を入力" className="w-full border-2 border-orange-100 focus:border-orange-400 p-2.5 rounded-xl text-sm bg-white font-bold outline-none" />
-            <input type="text" value={sq.answer} onChange={(e) => handleSubQuestionChange(i, 'answer', e.target.value)} placeholder="解答を入力" className="w-full border-2 border-rose-100 focus:border-rose-400 p-2.5 rounded-xl text-sm bg-white font-bold outline-none text-rose-700" />
+            <input type="text" value={sq.question} onChange={e => { const newSq = [...subQuestions]; newSq[i].question = e.target.value; setSubQuestions(newSq); }} placeholder="問題を入力" className="w-full border-2 border-orange-100 p-2.5 rounded-xl text-sm font-bold outline-none" />
+            <input type="text" value={sq.answer} onChange={e => { const newSq = [...subQuestions]; newSq[i].answer = e.target.value; setSubQuestions(newSq); }} placeholder="解答を入力" className="w-full border-2 border-rose-100 p-2.5 rounded-xl text-sm font-bold outline-none text-rose-700" />
           </div>
         ))}
-        <button type="button" onClick={() => setSubQuestions([...subQuestions, { question: '', answer: '' }])} className="w-full py-3 border-2 border-dashed border-amber-300 text-amber-700 hover:bg-amber-50 rounded-2xl text-sm font-bold transition">+ 問題を追加する</button>
+        <button type="button" onClick={() => setSubQuestions([...subQuestions, { question: '', answer: '' }])} className="w-full py-3 border-2 border-dashed border-amber-300 text-amber-700 rounded-2xl text-sm font-bold">+ 問題を追加する</button>
       </div>
-      <button type="submit" className="w-full bg-gradient-to-r from-orange-400 to-rose-400 hover:from-orange-500 hover:to-rose-500 text-white py-3.5 rounded-2xl text-base font-extrabold shadow-lg transition transform hover:scale-[1.02]">公開してXPを獲得！🚀</button>
+      <button type="submit" className="w-full bg-gradient-to-r from-orange-400 to-rose-400 text-white py-3.5 rounded-2xl text-base font-extrabold shadow-lg">公開する</button>
     </form>
   );
 }
@@ -553,94 +431,64 @@ function CreateQuestionView({ folders, defaultFolderId, userProfile, onSuccess }
 function QuestionDetailView({ question, onBack, onDelete, onAddComment }) {
   const [commentText, setCommentText] = useState('');
   const [showAnswers, setShowAnswers] = useState({});
-
   if (!question) return null;
 
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center mb-2">
-        <button onClick={onBack} className="flex items-center gap-1 text-sm font-bold text-amber-700 bg-white px-3 py-1.5 rounded-full shadow-sm hover:bg-amber-50 transition"><ArrowLeft className="w-4 h-4" /> 戻る</button>
-        <button onClick={() => onDelete(question.id)} className="flex items-center gap-1 text-xs font-bold text-rose-600 bg-white border border-rose-100 px-3 py-1.5 rounded-full shadow-sm hover:bg-rose-50 transition"><Trash2 className="w-3.5 h-3.5" /> 削除</button>
+        <button onClick={onBack} className="flex items-center gap-1 text-sm font-bold text-amber-700 bg-white px-3 py-1.5 rounded-full shadow-sm"><ArrowLeft className="w-4 h-4" /> 戻る</button>
+        <button onClick={() => onDelete(question.id)} className="flex items-center gap-1 text-xs font-bold text-rose-600 bg-white border px-3 py-1.5 rounded-full shadow-sm"><Trash2 className="w-3.5 h-3.5" /> 削除</button>
       </div>
-      <div className="bg-white p-6 rounded-3xl border border-stone-100 shadow-xl space-y-4 relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-amber-300 via-orange-300 to-rose-300"></div>
-        <div className="inline-block px-3 py-1 bg-gradient-to-r from-amber-100 to-orange-100 text-amber-800 text-xs font-extrabold rounded-lg shadow-sm">{question.subject}</div>
+      <div className="bg-white p-6 rounded-3xl border shadow-xl space-y-4 relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-amber-300 to-rose-300"></div>
+        <div className="inline-block px-3 py-1 bg-amber-100 text-amber-800 text-xs font-extrabold rounded-lg">{question.subject}</div>
         <h2 className="text-2xl font-extrabold text-stone-800">{question.title}</h2>
-        <p className="text-xs font-bold text-stone-400 flex items-center gap-1">作成者: <span className="text-stone-600">{question.author || '名無し'}</span></p>
-        
-        <div className="space-y-3 pt-4 border-t border-stone-100">
+        <div className="space-y-3 pt-4 border-t">
           {(question.subQuestions || []).map((sq, i) => (
-            <div key={i} className="p-4 bg-gradient-to-b from-stone-50 to-white border border-stone-200 rounded-2xl shadow-sm">
+            <div key={i} className="p-4 bg-stone-50 border rounded-2xl shadow-sm">
               <p className="font-extrabold text-sm text-stone-700 mb-3"><span className="text-amber-500 mr-1">Q{i+1}.</span> {sq.question}</p>
-              <div>
-                {showAnswers[i] ? (
-                  <div className="space-y-2 animate-fade-in">
-                    <div className="text-sm text-rose-700 bg-rose-50 p-3 rounded-xl border border-rose-200 font-extrabold shadow-inner flex items-center gap-2"><Sparkles className="w-4 h-4 text-rose-400" /> {sq.answer}</div>
-                    <button onClick={() => setShowAnswers(p => ({...p, [i]: false}))} className="text-[11px] text-stone-400 font-bold underline hover:text-stone-600 pl-1">答えを隠す</button>
-                  </div>
-                ) : (
-                  <button onClick={() => setShowAnswers(p => ({...p, [i]: true}))} className="w-full py-2.5 bg-amber-100 hover:bg-amber-200 text-amber-800 rounded-xl text-sm font-extrabold shadow-sm transition transform hover:scale-[1.01] active:scale-95">答えを見る 👀</button>
-                )}
-              </div>
+              {showAnswers[i] ? (
+                <div className="space-y-2">
+                  <div className="text-sm text-rose-700 bg-rose-50 p-3 rounded-xl border font-extrabold">{sq.answer}</div>
+                  <button onClick={() => setShowAnswers(p => ({...p, [i]: false}))} className="text-[11px] text-stone-400 font-bold underline">隠す</button>
+                </div>
+              ) : <button onClick={() => setShowAnswers(p => ({...p, [i]: true}))} className="w-full py-2.5 bg-amber-100 text-amber-800 rounded-xl text-sm font-extrabold">答えを見る</button>}
             </div>
           ))}
         </div>
       </div>
-      
-      <div className="bg-white p-6 rounded-3xl border border-stone-100 shadow-lg space-y-4">
-        <h3 className="font-extrabold text-base text-stone-700 flex items-center gap-2">💬 コメント</h3>
+      <div className="bg-white p-6 rounded-3xl border shadow-lg space-y-4">
+        <h3 className="font-extrabold text-base text-stone-700">💬 コメント</h3>
         <div className="flex gap-2">
-          <input type="text" value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder="応援や感想を書こう！ (+5 XP)" className="flex-1 bg-stone-50 border-2 border-stone-200 focus:border-amber-400 p-2.5 rounded-xl text-sm outline-none font-bold transition" />
-          <button onClick={() => { if (commentText) { onAddComment(question.id, commentText); setCommentText(''); } }} className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2.5 rounded-xl text-sm font-extrabold shadow-md transition transform hover:scale-105">送信</button>
+          <input type="text" value={commentText} onChange={e => setCommentText(e.target.value)} placeholder="コメント (+5 XP)" className="flex-1 bg-stone-50 border-2 p-2.5 rounded-xl text-sm font-bold outline-none" />
+          <button onClick={() => { if(commentText) { onAddComment(question.id, commentText); setCommentText(''); } }} className="bg-amber-500 text-white px-4 py-2.5 rounded-xl text-sm font-extrabold shadow-md">送信</button>
         </div>
         <div className="space-y-2 pt-2">
-          {(question.comments || []).map(c => (
-            <div key={c.id} className="text-sm bg-stone-50 p-3 rounded-2xl border border-stone-100"><span className="font-extrabold text-amber-700 mr-2">{c.user}</span><span className="font-medium text-stone-600">{c.text}</span></div>
-          ))}
+          {(question.comments || []).map(c => <div key={c.id} className="text-sm bg-stone-50 p-3 rounded-2xl border"><span className="font-extrabold text-amber-700 mr-2">{c.user}</span><span className="font-medium">{c.text}</span></div>)}
         </div>
       </div>
     </div>
   );
 }
 
-function HomeView({ folders, questions, onSelectQuestion, onOpenFolderModal, onToggleLike }) {
+function HomeView({ folders, questions, onSelectQuestion, onOpenFolderModal, onToggleLike, secretCode }) {
   return (
     <div className="space-y-8">
+      <div className="bg-orange-100 border-2 border-orange-200 p-3 rounded-xl flex items-center justify-between text-sm font-extrabold text-orange-800">
+        <div className="flex items-center gap-2"><KeyRound className="w-4 h-4"/> 参加中の合言葉: <span className="bg-white px-2 py-0.5 rounded-md">{secretCode}</span></div>
+      </div>
       <div>
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-extrabold text-stone-700 flex items-center gap-2"><FolderPlus className="w-5 h-5 text-amber-500" /> フォルダ</h2>
-          <button onClick={onOpenFolderModal} className="text-xs text-orange-700 font-extrabold bg-orange-100 hover:bg-orange-200 px-4 py-2 rounded-full shadow-sm transition">＋ 作成</button>
-        </div>
+        <div className="flex justify-between items-center mb-4"><h2 className="text-lg font-extrabold text-stone-700 flex items-center gap-2"><FolderPlus className="w-5 h-5 text-amber-500" /> フォルダ</h2><button onClick={onOpenFolderModal} className="text-xs text-orange-700 font-extrabold bg-orange-100 px-4 py-2 rounded-full">＋ 作成</button></div>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {folders.map(f => (
-            <div key={f.id} className="bg-white p-4 rounded-2xl border border-amber-100 shadow-md hover:shadow-lg transition cursor-pointer transform hover:-translate-y-1">
-              <FolderPlus className="w-8 h-8 text-amber-400 mb-2 opacity-80" />
-              <h3 className="font-extrabold text-sm text-stone-700 line-clamp-1">{f.name}</h3>
-            </div>
-          ))}
+          {folders.map(f => <div key={f.id} className="bg-white p-4 rounded-2xl border shadow-md cursor-pointer hover:-translate-y-1 transition"><FolderPlus className="w-8 h-8 text-amber-400 mb-2" /><h3 className="font-extrabold text-sm text-stone-700 truncate">{f.name}</h3></div>)}
         </div>
       </div>
-
       <div>
-        <h2 className="text-lg font-extrabold text-stone-700 mb-4 flex items-center gap-2"><Sparkles className="w-5 h-5 text-orange-400" /> みんなの予想問題</h2>
+        <h2 className="text-lg font-extrabold text-stone-700 mb-4 flex items-center gap-2"><Sparkles className="w-5 h-5 text-orange-400" /> 予想問題</h2>
         <div className="space-y-4">
           {questions.map(q => (
-            <div key={q.id} onClick={() => onSelectQuestion(q.id)} className="bg-white p-5 rounded-3xl border border-stone-100 shadow-md hover:shadow-xl transition cursor-pointer space-y-3 relative overflow-hidden group">
-              <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-amber-400 to-rose-400 transform origin-top transition-transform scale-y-0 group-hover:scale-y-100"></div>
-              <div>
-                <span className="text-[10px] font-extrabold bg-amber-100 text-amber-800 px-2.5 py-1 rounded-md shadow-sm">{q.subject}</span>
-              </div>
-              <h3 className="font-extrabold text-lg text-stone-800 leading-tight">{q.title}</h3>
-              <div className="flex justify-between items-center text-xs border-t border-stone-100 pt-3 mt-1">
-                <span className="font-bold text-stone-400">作成: {q.author || '名無し'}</span>
-                <button onClick={(e) => { e.stopPropagation(); onToggleLike(q.id); }} className={`flex items-center gap-1.5 font-extrabold px-3 py-1.5 rounded-full transition ${q.likedByMe ? 'bg-rose-100 text-rose-600' : 'bg-stone-50 text-stone-500 hover:bg-rose-50 hover:text-rose-500'}`}>
-                  <ThumbsUp className="w-4 h-4" /> {q.likes || 0}
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
+            <div key={q.id} onClick={() => onSelectQuestion(q.id)} className="bg-white p-5 rounded-3xl border shadow-md cursor-pointer">
+              <span className="text-[10px] font-extrabold bg-amber-100 text-amber-800 px-2.5 py-1 rounded-md">{q.subject}</span>
+              <h3 className="font-extrabold text-lg text-stone-800 mt-2">{q.title}</h3>
+              <div className="flex justify-between items-center text-xs border-t pt-3 mt-3">
+                <span className="font-bold text-stone-400
