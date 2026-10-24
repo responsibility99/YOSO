@@ -10,8 +10,5 @@ const firebaseConfig = {
   appId: "1:91328892475:web:fc5cf5a16433174648161e"
 };
 
-// Firebaseの初期化
 const app = initializeApp(firebaseConfig);
-
-// データベース(Firestore)の接続設定を外部に公開
 export const db = getFirestore(app);
