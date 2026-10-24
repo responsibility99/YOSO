@@ -33,7 +33,6 @@ export default function App() {
     const saved = localStorage.getItem('study_app_exam_v3');
     return saved ? JSON.parse(saved) : { name: '', date: '' };
   });
-  const [isEditingExam, setIsEditingExam] = useState(false);
 
   const [folders, setFolders] = useState([]);
   const [newFolderName, setNewFolderName] = useState('');
@@ -45,8 +44,6 @@ export default function App() {
     const saved = localStorage.getItem('study_app_logs_v3');
     return saved ? JSON.parse(saved) : [];
   });
-
-  const [deleteConfirmQId, setDeleteConfirmQId] = useState(null);
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'folders'), (snapshot) => {
@@ -65,25 +62,6 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('study_app_user_v3', JSON.stringify(userProfile));
   }, [userProfile]);
-
-  useEffect(() => {
-    localStorage.setItem('study_app_exam_v3', JSON.stringify(examConfig));
-  }, [examConfig]);
-
-  useEffect(() => {
-    localStorage.setItem('study_app_logs_v3', JSON.stringify(studyLogs));
-  }, [studyLogs]);
-
-  const calculateDaysLeft = (targetDateStr) => {
-    if (!targetDateStr) return null;
-    const target = new Date(targetDateStr);
-    const today = new Date();
-    target.setHours(0, 0, 0, 0);
-    today.setHours(0, 0, 0, 0);
-    return Math.ceil((target - today) / (1000 * 60 * 60 * 24));
-  };
-
-  const daysLeft = calculateDaysLeft(examConfig.date);
 
   const handleCreateFolder = async (e) => {
     e.preventDefault();
@@ -116,16 +94,6 @@ export default function App() {
     }
   };
 
-  const handleDeleteQuestion = async (qId) => {
-    try {
-      await deleteDoc(doc(db, 'questions', qId));
-      setDeleteConfirmQId(null);
-      setSelectedQuestionId(null);
-    } catch (err) {
-      alert('削除に失敗しました');
-    }
-  };
-
   return (
     <div className="min-h-screen bg-amber-50/40 text-stone-800 flex flex-col font-sans pb-24 md:pb-8">
       <header className="bg-white border-b border-amber-200/60 sticky top-0 z-30 shadow-sm">
@@ -145,12 +113,6 @@ export default function App() {
 
           <div className="flex items-center gap-2">
             <button 
-              onClick={() => setShowQrModal(true)}
-              className="p-2 text-amber-800 bg-amber-100/60 hover:bg-amber-100 rounded-full border border-amber-200/80 transition"
-            >
-              <QrCode className="w-4 h-4" />
-            </button>
-            <button 
               onClick={() => setShowProfileModal(true)}
               className="flex items-center gap-2 bg-amber-100/60 hover:bg-amber-100 px-3 py-1.5 rounded-full transition-all text-sm font-medium border border-amber-200/80 text-amber-900"
             >
@@ -166,9 +128,6 @@ export default function App() {
           <QuestionDetailView 
             question={questions.find(q => q.id === selectedQuestionId)} 
             onBack={() => setSelectedQuestionId(null)}
-            userProfile={userProfile}
-            onToggleLike={handleToggleLike}
-            onPromptDelete={(qId) => setDeleteConfirmQId(qId)}
             onAddComment={async (qId, text) => {
               const q = questions.find(item => item.id === qId);
               if (!q) return;
@@ -176,7 +135,6 @@ export default function App() {
               const newComments = [...(q.comments || []), {
                 id: 'c_' + Date.now(),
                 user: userProfile?.name || "名無しユーザー",
-                avatar: userProfile?.avatar || "🎓",
                 text,
                 time: 'たった今'
               }];
@@ -187,16 +145,12 @@ export default function App() {
           <>
             {activeTab === 'home' && (
               <HomeView 
-                examConfig={examConfig}
-                daysLeft={daysLeft}
-                setIsEditingExam={setIsEditingExam}
                 folders={folders}
                 questions={questions}
                 onSelectFolder={(id) => setSelectedFolderId(id)}
                 onSelectQuestion={(id) => setSelectedQuestionId(id)}
                 onOpenFolderModal={() => setShowFolderModal(true)}
                 onToggleLike={handleToggleLike}
-                onGoToCreate={() => setActiveTab('create')}
               />
             )}
             {activeTab === 'create' && (
@@ -207,7 +161,7 @@ export default function App() {
                 onSuccess={() => setActiveTab('home')}
               />
             )}
-            {activeTab === 'timer' && <TimerView onSaveLog={(log) => setStudyLogs([log, ...studyLogs])} />}
+            {activeTab === 'timer' && <TimerView />}
             {activeTab === 'records' && <RecordsView studyLogs={studyLogs} />}
           </>
         )}
@@ -226,15 +180,12 @@ export default function App() {
         <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl space-y-4">
             <h3 className="text-lg font-bold text-stone-800">プロフィール設定</h3>
-            <div>
-              <label className="block text-xs font-semibold text-stone-500 mb-1">表示名</label>
-              <input 
-                type="text" 
-                value={userProfile?.name || ''}
-                onChange={(e) => setUserProfile({ ...userProfile, name: e.target.value })}
-                className="w-full border border-stone-300 rounded-xl p-2.5 text-sm outline-none"
-              />
-            </div>
+            <input 
+              type="text" 
+              value={userProfile?.name || ''}
+              onChange={(e) => setUserProfile({ ...userProfile, name: e.target.value })}
+              className="w-full border p-2.5 rounded-xl text-sm outline-none"
+            />
             <button onClick={() => setShowProfileModal(false)} className="w-full bg-amber-600 text-white py-2 rounded-xl text-xs font-bold">
               保存する
             </button>
@@ -265,11 +216,21 @@ function CreateQuestionView({ folders, defaultFolderId, userProfile, onSuccess }
   const [title, setTitle] = useState('');
   const [subQuestions, setSubQuestions] = useState([{ question: '', answer: '' }]);
 
+  const handleAddSubQuestion = () => {
+    setSubQuestions([...subQuestions, { question: '', answer: '' }]);
+  };
+
+  const handleSubQuestionChange = (index, field, value) => {
+    const updated = [...subQuestions];
+    updated[index][field] = value;
+    setSubQuestions(updated);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!title.trim()) return;
 
-    // 安全にデータを準備（プロフィール変更後もエラーにならない仕組み）
+    // プロフィール変更後も safe (undefined 対策)
     const newQuestion = {
       folderId,
       subject,
@@ -294,28 +255,51 @@ function CreateQuestionView({ folders, defaultFolderId, userProfile, onSuccess }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white p-6 rounded-2xl space-y-4 shadow-sm border border-stone-200">
-      <h2 className="text-base font-bold text-stone-800 flex items-center gap-2">
+    <form onSubmit={handleSubmit} className="bg-white p-6 rounded-2xl space-y-4 shadow-sm border border-stone-200 max-w-2xl mx-auto">
+      <h2 className="text-lg font-bold text-stone-800 flex items-center gap-2">
         <PlusCircle className="w-5 h-5 text-amber-600" /> 新しい予想問題を投稿する
       </h2>
+
       <div>
-        <label className="block text-xs font-semibold text-stone-500 mb-1">タイトル</label>
-        <input type="text" required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="例: 2学期中間・過去問パターン" className="w-full border p-2.5 rounded-xl text-sm outline-none" />
+        <label className="block text-xs font-semibold text-stone-500 mb-1">フォルダ選択</label>
+        <select value={folderId} onChange={(e) => setFolderId(e.target.value)} className="w-full border p-2.5 rounded-xl text-sm outline-none">
+          {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+        </select>
       </div>
+
       <div>
         <label className="block text-xs font-semibold text-stone-500 mb-1">教科</label>
         <select value={subject} onChange={(e) => setSubject(e.target.value)} className="w-full border p-2.5 rounded-xl text-sm outline-none">
           {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
       </div>
-      <button type="submit" className="w-full bg-amber-600 text-white py-2.5 rounded-xl text-sm font-bold hover:bg-amber-700 transition">
+
+      <div>
+        <label className="block text-xs font-semibold text-stone-500 mb-1">タイトル</label>
+        <input type="text" required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="例: 2学期中間・過去問パターン" className="w-full border p-2.5 rounded-xl text-sm outline-none" />
+      </div>
+
+      <div className="space-y-3 pt-2">
+        <label className="block text-xs font-semibold text-stone-500">問題と解答</label>
+        {subQuestions.map((sq, i) => (
+          <div key={i} className="p-3 bg-stone-50 rounded-xl space-y-2 border border-stone-200">
+            <input type="text" value={sq.question} onChange={(e) => handleSubQuestionChange(i, 'question', e.target.value)} placeholder={`問題 ${i + 1}`} className="w-full border p-2 rounded-lg text-xs outline-none bg-white" />
+            <input type="text" value={sq.answer} onChange={(e) => handleSubQuestionChange(i, 'answer', e.target.value)} placeholder={`解答 ${i + 1}`} className="w-full border p-2 rounded-lg text-xs outline-none bg-white" />
+          </div>
+        ))}
+        <button type="button" onClick={handleAddSubQuestion} className="w-full py-2 border border-dashed border-amber-400 text-amber-800 rounded-xl text-xs font-bold hover:bg-amber-50">
+          + 問題を追加する
+        </button>
+      </div>
+
+      <button type="submit" className="w-full bg-amber-600 text-white py-3 rounded-xl text-sm font-bold hover:bg-amber-700 transition shadow-md">
         予想問題を公開する
       </button>
     </form>
   );
 }
 
-function QuestionDetailView({ question, onBack, userProfile, onToggleLike, onPromptDelete, onAddComment }) {
+function QuestionDetailView({ question, onBack, onAddComment }) {
   const [commentText, setCommentText] = useState('');
 
   if (!question) return null;
@@ -329,7 +313,17 @@ function QuestionDetailView({ question, onBack, userProfile, onToggleLike, onPro
         <span className="text-xs font-bold bg-amber-100 text-amber-800 px-2.5 py-1 rounded-md">{question.subject}</span>
         <h2 className="text-lg font-bold text-stone-800">{question.title}</h2>
         <p className="text-xs text-stone-400">投稿者: {question.author || '名無しユーザー'}</p>
+        
+        <div className="space-y-2 pt-3 border-t">
+          {(question.subQuestions || []).map((sq, i) => (
+            <div key={i} className="p-3 bg-amber-50/50 rounded-xl space-y-1">
+              <p className="font-bold text-xs text-stone-800">問{i+1}: {sq.question}</p>
+              <p className="text-xs text-amber-900">答: {sq.answer}</p>
+            </div>
+          ))}
+        </div>
       </div>
+
       <div className="bg-white p-5 rounded-2xl border border-stone-200 space-y-3">
         <h3 className="font-bold text-sm">コメント</h3>
         <div className="flex gap-2">
@@ -369,20 +363,9 @@ function NavButton({ active, icon, label, onClick }) {
   );
 }
 
-function HomeView({ examConfig, daysLeft, setIsEditingExam, folders, questions, onSelectFolder, onSelectQuestion, onOpenFolderModal, onToggleLike, onGoToCreate }) {
+function HomeView({ folders, questions, onSelectFolder, onSelectQuestion, onOpenFolderModal, onToggleLike }) {
   return (
     <div className="space-y-6">
-      <div className="bg-gradient-to-r from-amber-600 to-orange-600 rounded-2xl p-5 text-white shadow-md flex justify-between items-center">
-        <div>
-          <h2 className="text-xl font-bold">テスト勉強をスタートしよう！</h2>
-          <p className="text-xs text-amber-100 mt-1">{examConfig.date ? `試験日: ${examConfig.date}` : '試験日未設定'}</p>
-        </div>
-        <div className="bg-white/20 rounded-xl px-4 py-2 text-center">
-          <span className="text-xs">残り日数</span>
-          <p className="text-lg font-bold">{daysLeft !== null ? `${daysLeft}日` : '-'}</p>
-        </div>
-      </div>
-
       <div>
         <div className="flex justify-between items-center mb-3">
           <h2 className="text-base font-bold text-stone-800">テスト対策フォルダ</h2>
@@ -403,9 +386,7 @@ function HomeView({ examConfig, daysLeft, setIsEditingExam, folders, questions, 
         <div className="space-y-3">
           {questions.map(q => (
             <div key={q.id} onClick={() => onSelectQuestion(q.id)} className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm cursor-pointer space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-md">{q.subject}</span>
-              </div>
+              <span className="text-xs font-bold bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-md">{q.subject}</span>
               <h3 className="font-bold text-stone-800 text-base">{q.title}</h3>
               <div className="flex justify-between items-center text-xs text-stone-500 border-t pt-2">
                 <span>投稿者: {q.author || '名無しユーザー'}</span>
@@ -421,19 +402,16 @@ function HomeView({ examConfig, daysLeft, setIsEditingExam, folders, questions, 
   );
 }
 
-function TimerView({ onSaveLog }) {
+function TimerView() {
   const [seconds, setSeconds] = useState(0);
   const [isActive, setIsActive] = useState(false);
 
   useEffect(() => {
     let interval = null;
-    if (isActive) {
-      interval = setInterval(() => setSeconds(s => s + 1), 1000);
-    } else if (!isActive && seconds !== 0) {
-      clearInterval(interval);
-    }
+    if (isActive) interval = setInterval(() => setSeconds(s => s + 1), 1000);
+    else clearInterval(interval);
     return () => clearInterval(interval);
-  }, [isActive, seconds]);
+  }, [isActive]);
 
   return (
     <div className="bg-white p-6 rounded-2xl text-center space-y-4 border border-amber-100">
@@ -461,14 +439,4 @@ function RecordsView({ studyLogs }) {
         <p className="text-xs text-stone-400">まだ記録がありません。</p>
       ) : (
         <ul className="space-y-2">
-          {studyLogs.map((log, index) => (
-            <li key={index} className="text-xs p-2 bg-stone-50 rounded-lg flex justify-between">
-              <span>{log.subject || '自習'}</span>
-              <span className="font-bold">{log.minutes || 0}分</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
+          {studyLogs.map((log,
