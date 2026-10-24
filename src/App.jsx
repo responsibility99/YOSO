@@ -3,7 +3,7 @@ import {
   BookOpen, Clock, FolderPlus, ThumbsUp, 
   Home, PlusCircle, BarChart2, ArrowLeft, Trash2, Calendar, Sparkles,
   MessageCircle, Send, Trophy, Medal, Flame, KeyRound, LogOut,
-  ImagePlus, X, HelpCircle // ← HelpCircleを追加
+  ImagePlus, X, HelpCircle, Edit // ← Editを追加
 } from 'lucide-react';
 import { db } from './firebase';
 import { 
@@ -46,7 +46,7 @@ export default function App() {
     };
   });
   const [showProfileModal, setShowProfileModal] = useState(false);
-  const [showHelpModal, setShowHelpModal] = useState(false); // ← ヘルプ画面用の状態
+  const [showHelpModal, setShowHelpModal] = useState(false);
   const [showLevelUp, setShowLevelUp] = useState(false);
   const [tempCode, setTempCode] = useState('');
 
@@ -182,7 +182,6 @@ export default function App() {
           <h1 className="font-extrabold text-lg drop-shadow-md">YOSO</h1>
         </div>
         
-        {/* ヘッダー右側のボタン群 */}
         <div className="flex items-center gap-2">
           <button onClick={() => setShowHelpModal(true)} className="bg-white/90 hover:bg-white text-amber-600 p-2 rounded-full shadow-md transition transform hover:scale-105">
             <HelpCircle className="w-5 h-5" />
@@ -216,8 +215,10 @@ export default function App() {
         {selectedQuestionId ? (
           <QuestionDetailView 
             question={questions.find(q => q.id === selectedQuestionId)} 
+            currentUid={userProfile.uid}
             onBack={() => setSelectedQuestionId(null)}
             onDelete={async (qId) => { if(window.confirm('削除しますか？')) { await deleteDoc(doc(db, 'questions', qId)); setSelectedQuestionId(null); } }}
+            onUpdate={async (qId, updatedData) => { await updateDoc(doc(db, 'questions', qId), updatedData); }}
             onAddComment={async (qId, text) => {
               const q = questions.find(item => item.id === qId);
               await updateDoc(doc(db, 'questions', qId), { comments: [...(q.comments || []), { id: 'c_' + Date.now(), user: userProfile.name, text }] });
@@ -263,8 +264,8 @@ export default function App() {
                 <p className="text-xs">同じ合言葉を入力した人同士で、問題やチャットが共有されます。退出・変更は右上のプロフィールから行えます。</p>
               </div>
               <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100">
-                <h4 className="text-orange-800 font-extrabold mb-1">✍️ 問題の投稿・解答</h4>
-                <p className="text-xs">「投稿」タブから予想問題を作れます。ホーム画面で問題をタップすると答え合わせやコメントができます。</p>
+                <h4 className="text-orange-800 font-extrabold mb-1">✍️ 問題の投稿・解答・編集</h4>
+                <p className="text-xs">「投稿」タブから予想問題を作れます。投稿した問題は詳細画面の右上のボタンから編集や削除が可能です。</p>
               </div>
               <div className="bg-yellow-50 p-4 rounded-2xl border border-yellow-100">
                 <h4 className="text-yellow-800 font-extrabold mb-1">🏆 XPとレベル・バッジ</h4>
@@ -533,16 +534,75 @@ function CreateQuestionView({ folders, defaultFolderId, userProfile, onSuccess }
   );
 }
 
-function QuestionDetailView({ question, onBack, onDelete, onAddComment }) {
+function QuestionDetailView({ question, currentUid, onBack, onDelete, onUpdate, onAddComment }) {
   const [commentText, setCommentText] = useState('');
   const [showAnswers, setShowAnswers] = useState({});
+  const [isEditing, setIsEditing] = useState(false);
+  
+  // 編集用のステート
+  const [editTitle, setEditTitle] = useState('');
+  const [editSubject, setEditSubject] = useState('');
+  const [editSubQuestions, setEditSubQuestions] = useState([]);
+
+  useEffect(() => {
+    if (question && !isEditing) {
+      setEditTitle(question.title);
+      setEditSubject(question.subject);
+      // ディープコピーして編集用配列をセット
+      setEditSubQuestions(JSON.parse(JSON.stringify(question.subQuestions || [])));
+    }
+  }, [question, isEditing]);
+
   if (!question) return null;
+
+  const handleSaveEdit = () => {
+    if (!editTitle.trim()) return;
+    onUpdate(question.id, {
+      title: editTitle,
+      subject: editSubject,
+      subQuestions: editSubQuestions
+    });
+    setIsEditing(false);
+  };
+
+  if (isEditing) {
+    return (
+      <div className="bg-white p-6 rounded-3xl space-y-5 shadow-xl border border-amber-100 max-w-2xl mx-auto">
+        <div className="flex justify-between items-center mb-2">
+          <button onClick={() => setIsEditing(false)} className="text-sm font-bold text-stone-500">キャンセル</button>
+          <h2 className="text-lg font-extrabold text-amber-900">問題を編集</h2>
+        </div>
+        <div className="bg-stone-50 p-4 rounded-2xl space-y-4 border border-stone-100">
+          <select value={editSubject} onChange={e => setEditSubject(e.target.value)} className="w-full border-2 border-stone-200 p-2.5 rounded-xl text-sm bg-white font-bold outline-none">{SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}</select>
+          <input type="text" required value={editTitle} onChange={e => setEditTitle(e.target.value)} placeholder="タイトル" className="w-full border-2 border-stone-200 p-2.5 rounded-xl text-sm font-bold outline-none" />
+        </div>
+        <div className="space-y-3">
+          {editSubQuestions.map((sq, i) => (
+            <div key={i} className="p-4 bg-orange-50 rounded-2xl space-y-2 border relative">
+              <div className="absolute top-2 right-2 flex gap-2">
+                <span className="text-xs font-bold text-orange-300">Q{i+1}</span>
+                <button onClick={() => setEditSubQuestions(editSubQuestions.filter((_, idx) => idx !== i))} className="text-rose-500 hover:text-rose-700"><Trash2 className="w-4 h-4" /></button>
+              </div>
+              <input type="text" value={sq.question} onChange={e => { const newSq = [...editSubQuestions]; newSq[i].question = e.target.value; setEditSubQuestions(newSq); }} placeholder="問題を入力" className="w-full border-2 border-orange-100 p-2.5 rounded-xl text-sm font-bold outline-none" />
+              <input type="text" value={sq.answer} onChange={e => { const newSq = [...editSubQuestions]; newSq[i].answer = e.target.value; setEditSubQuestions(newSq); }} placeholder="解答を入力" className="w-full border-2 border-rose-100 p-2.5 rounded-xl text-sm font-bold outline-none text-rose-700" />
+            </div>
+          ))}
+          <button type="button" onClick={() => setEditSubQuestions([...editSubQuestions, { question: '', answer: '' }])} className="w-full py-3 border-2 border-dashed border-amber-300 text-amber-700 rounded-2xl text-sm font-bold">+ 問題を追加する</button>
+        </div>
+        <button onClick={handleSaveEdit} className="w-full bg-amber-500 text-white py-3.5 rounded-2xl text-base font-extrabold shadow-lg">変更を保存</button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center mb-2">
         <button onClick={onBack} className="flex items-center gap-1 text-sm font-bold text-amber-700 bg-white px-3 py-1.5 rounded-full shadow-sm"><ArrowLeft className="w-4 h-4" /> 戻る</button>
-        <button onClick={() => onDelete(question.id)} className="flex items-center gap-1 text-xs font-bold text-rose-600 bg-white border px-3 py-1.5 rounded-full shadow-sm"><Trash2 className="w-3.5 h-3.5" /> 削除</button>
+        <div className="flex gap-2">
+          {/* 編集ボタンと削除ボタンを表示 */}
+          <button onClick={() => setIsEditing(true)} className="flex items-center gap-1 text-xs font-bold text-stone-600 bg-white border px-3 py-1.5 rounded-full shadow-sm"><Edit className="w-3.5 h-3.5" /> 編集</button>
+          <button onClick={() => onDelete(question.id)} className="flex items-center gap-1 text-xs font-bold text-rose-600 bg-white border px-3 py-1.5 rounded-full shadow-sm"><Trash2 className="w-3.5 h-3.5" /> 削除</button>
+        </div>
       </div>
       <div className="bg-white p-6 rounded-3xl border shadow-xl space-y-4 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-amber-300 to-rose-300"></div>
