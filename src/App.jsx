@@ -4,7 +4,7 @@ import {
   MessageSquare, User, Home, PlusCircle, BarChart2, CheckCircle, 
   Trash2, ChevronDown, ChevronUp, ArrowLeft, Play, Pause, RotateCcw, 
   Settings, Award, Sparkles, Filter, Edit3, Flame,
-  TrendingUp, PieChart, Layers, CheckCircle2, Zap, AlertCircle, Camera
+  TrendingUp, PieChart, Layers, CheckCircle2, Zap, AlertCircle, Camera, QrCode, X
 } from 'lucide-react';
 import { db } from './firebase';
 import { 
@@ -34,8 +34,8 @@ export default function App() {
     return saved ? JSON.parse(saved) : { name: 'テスト対策生', avatar: '🎓', customAvatar: null };
   });
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showQrModal, setShowQrModal] = useState(false);
 
-  // 初期状態を「未設定」に設定
   const [examConfig, setExamConfig] = useState(() => {
     const saved = localStorage.getItem('study_app_exam_v3');
     return saved ? JSON.parse(saved) : { name: '', date: '' };
@@ -155,6 +155,8 @@ export default function App() {
     }
   };
 
+  const appUrl = window.location.href;
+
   return (
     <div className="min-h-screen bg-amber-50/40 text-stone-800 flex flex-col font-sans pb-24 md:pb-8">
       <header className="bg-white border-b border-amber-200/60 sticky top-0 z-30 shadow-sm">
@@ -172,13 +174,22 @@ export default function App() {
             </div>
           </div>
 
-          <button 
-            onClick={() => setShowProfileModal(true)}
-            className="flex items-center gap-2 bg-amber-100/60 hover:bg-amber-100 px-3 py-1.5 rounded-full transition-all text-sm font-medium border border-amber-200/80 text-amber-900"
-          >
-            <UserAvatar avatar={userProfile.avatar} customAvatar={userProfile.customAvatar} size="w-6 h-6" />
-            <span className="max-w-[100px] truncate">{userProfile.name}</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => setShowQrModal(true)}
+              className="p-2 text-amber-800 bg-amber-100/60 hover:bg-amber-100 rounded-full border border-amber-200/80 transition"
+              title="QRコードで共有"
+            >
+              <QrCode className="w-4 h-4" />
+            </button>
+            <button 
+              onClick={() => setShowProfileModal(true)}
+              className="flex items-center gap-2 bg-amber-100/60 hover:bg-amber-100 px-3 py-1.5 rounded-full transition-all text-sm font-medium border border-amber-200/80 text-amber-900"
+            >
+              <UserAvatar avatar={userProfile.avatar} customAvatar={userProfile.customAvatar} size="w-6 h-6" />
+              <span className="max-w-[100px] truncate">{userProfile.name}</span>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -287,6 +298,38 @@ export default function App() {
           />
         </div>
       </nav>
+
+      {showQrModal && (
+        <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl border border-amber-100 text-center space-y-4 relative">
+            <button 
+              onClick={() => setShowQrModal(false)}
+              className="absolute top-4 right-4 text-stone-400 hover:text-stone-600"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <h3 className="text-lg font-bold text-stone-800 flex items-center justify-center gap-2">
+              <QrCode className="w-5 h-5 text-amber-600" /> アプリを共有する
+            </h3>
+            <p className="text-xs text-stone-500">友達のスマホでこのQRコードを読み取ると、同じアプリを開けます！</p>
+            
+            <div className="flex justify-center py-2">
+              <img 
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(appUrl)}`} 
+                alt="QR Code" 
+                className="w-44 h-44 border p-2 rounded-xl bg-white shadow-sm"
+              />
+            </div>
+
+            <button 
+              onClick={() => setShowQrModal(false)}
+              className="w-full bg-amber-600 text-white py-2 rounded-xl text-xs font-bold hover:bg-amber-700 transition"
+            >
+              閉じる
+            </button>
+          </div>
+        </div>
+      )}
 
       {showProfileModal && (
         <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
