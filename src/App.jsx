@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   BookOpen, Clock, Calendar, FolderPlus, Plus, ThumbsUp, 
-  MessageSquare, User, Home, PlusCircle, BarChart2, CheckCircle, 
+  MessageSquare, Home, PlusCircle, BarChart2, CheckCircle, 
   Trash2, ChevronDown, ChevronUp, ArrowLeft, Play, Pause, RotateCcw, 
   Award, Sparkles, Edit3, TrendingUp, PieChart, Zap, AlertCircle, Camera, QrCode, X
 } from 'lucide-react';
@@ -188,4 +188,126 @@ export default function App() {
           <div className="flex items-center gap-2">
             <button 
               onClick={() => setShowQrModal(true)}
-              className="p-2 text-amber-800 bg-amber-100/60 hover:bg-amber-100 rounded-full border border-
+              className="p-2 text-amber-800 bg-amber-100/60 hover:bg-amber-100 rounded-full border border-amber-200/80 transition"
+              title="QRコードで共有"
+            >
+              <QrCode className="w-4 h-4" />
+            </button>
+            <button 
+              onClick={() => setShowProfileModal(true)}
+              className="flex items-center gap-2 bg-amber-100/60 hover:bg-amber-100 px-3 py-1.5 rounded-full transition-all text-sm font-medium border border-amber-200/80 text-amber-900"
+            >
+              <UserAvatar avatar={userProfile.avatar} customAvatar={userProfile.customAvatar} size="w-6 h-6" />
+              <span className="max-w-[100px] truncate">{userProfile.name}</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-4xl mx-auto px-4 py-6 flex-1 w-full">
+        {selectedQuestionId ? (
+          <QuestionDetailView 
+            question={questions.find(q => q.id === selectedQuestionId)} 
+            onBack={() => setSelectedQuestionId(null)}
+            userProfile={userProfile}
+            onToggleLike={handleToggleLike}
+            onPromptDelete={(qId) => setDeleteConfirmQId(qId)}
+            onAddComment={async (qId, text) => {
+              const q = questions.find(item => item.id === qId);
+              if (!q) return;
+              const qRef = doc(db, 'questions', qId);
+              const newComments = [...(q.comments || []), {
+                id: 'c_' + Date.now(),
+                user: userProfile.name,
+                avatar: userProfile.avatar,
+                customAvatar: userProfile.customAvatar || null,
+                text,
+                time: 'たった今'
+              }];
+              await updateDoc(qRef, { comments: newComments });
+            }}
+          />
+        ) : selectedFolderId ? (
+          <FolderDetailView 
+            folder={folders.find(f => f.id === selectedFolderId)}
+            questions={questions.filter(q => q.folderId === selectedFolderId)}
+            onBack={() => setSelectedFolderId(null)}
+            onSelectQuestion={(qId) => setSelectedQuestionId(qId)}
+            onToggleLike={handleToggleLike}
+            onCreateInFolder={() => setActiveTab('create')}
+          />
+        ) : (
+          <>
+            {activeTab === 'home' && (
+              <HomeView 
+                examConfig={examConfig}
+                daysLeft={daysLeft}
+                setIsEditingExam={setIsEditingExam}
+                folders={folders}
+                questions={questions}
+                onSelectFolder={(id) => setSelectedFolderId(id)}
+                onSelectQuestion={(id) => setSelectedQuestionId(id)}
+                onOpenFolderModal={() => setShowFolderModal(true)}
+                onToggleLike={handleToggleLike}
+                onGoToCreate={() => setActiveTab('create')}
+              />
+            )}
+
+            {activeTab === 'create' && (
+              <CreateQuestionView 
+                folders={folders}
+                defaultFolderId={selectedFolderId || (folders[0] ? folders[0].id : '')}
+                userProfile={userProfile}
+                onOpenFolderModal={() => setShowFolderModal(true)}
+                onSuccess={(targetFolderId) => {
+                  setSelectedFolderId(targetFolderId);
+                  setActiveTab('home');
+                }}
+              />
+            )}
+
+            {activeTab === 'timer' && (
+              <TimerView onSaveLog={handleAddStudyLog} />
+            )}
+
+            {activeTab === 'records' && (
+              <EnhancedRecordsView studyLogs={studyLogs} onClearLogs={() => setStudyLogs([])} />
+            )}
+          </>
+        )}
+      </main>
+
+      <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-amber-200/80 z-30 shadow-lg">
+        <div className="max-w-md mx-auto flex justify-around py-2">
+          <NavButton 
+            active={activeTab === 'home' && !selectedFolderId && !selectedQuestionId} 
+            icon={<Home className="w-5 h-5" />} 
+            label="ホーム" 
+            onClick={() => { setActiveTab('home'); setSelectedFolderId(null); setSelectedQuestionId(null); }} 
+          />
+          <NavButton 
+            active={activeTab === 'create'} 
+            icon={<PlusCircle className="w-5 h-5" />} 
+            label="投稿する" 
+            onClick={() => { setActiveTab('create'); setSelectedFolderId(null); setSelectedQuestionId(null); }} 
+          />
+          <NavButton 
+            active={activeTab === 'timer'} 
+            icon={<Clock className="w-5 h-5" />} 
+            label="タイマー" 
+            onClick={() => { setActiveTab('timer'); setSelectedFolderId(null); setSelectedQuestionId(null); }} 
+          />
+          <NavButton 
+            active={activeTab === 'records'} 
+            icon={<BarChart2 className="w-5 h-5" />} 
+            label="分析・記録" 
+            onClick={() => { setActiveTab('records'); setSelectedFolderId(null); setSelectedQuestionId(null); }} 
+          />
+        </div>
+      </nav>
+
+      {showQrModal && (
+        <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl border border-amber-100 text-center space-y-4 relative">
+            <button 
+              onClick={() => setShowQr
