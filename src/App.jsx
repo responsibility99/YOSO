@@ -197,8 +197,8 @@ export default function App() {
               onClick={() => setShowProfileModal(true)}
               className="flex items-center gap-2 bg-amber-100/60 hover:bg-amber-100 px-3 py-1.5 rounded-full transition-all text-sm font-medium border border-amber-200/80 text-amber-900"
             >
-              <UserAvatar avatar={userProfile.avatar} customAvatar={userProfile.customAvatar} size="w-6 h-6" />
-              <span className="max-w-[100px] truncate">{userProfile.name || 'テスト対策生'}</span>
+              <UserAvatar avatar={userProfile?.avatar} customAvatar={userProfile?.customAvatar} size="w-6 h-6" />
+              <span className="max-w-[100px] truncate">{userProfile?.name || 'テスト対策生'}</span>
             </button>
           </div>
         </div>
@@ -209,19 +209,4 @@ export default function App() {
           <QuestionDetailView 
             question={questions.find(q => q.id === selectedQuestionId)} 
             onBack={() => setSelectedQuestionId(null)}
-            userProfile={userProfile}
-            onToggleLike={handleToggleLike}
-            onPromptDelete={(qId) => setDeleteConfirmQId(qId)}
-            onAddComment={async (qId, text) => {
-              const q = questions.find(item => item.id === qId);
-              if (!q) return;
-              const qRef = doc(db, 'questions', qId);
-              const newComments = [...(q.comments || []), {
-                id: 'c_' + Date.now(),
-                user: userProfile?.name || "名無しユーザー",
-                avatar: userProfile?.avatar || "🎓",
-                customAvatar: userProfile?.customAvatar || null,
-                text,
-                time: 'たった今'
-              }];
-              await
+            userProfile={
