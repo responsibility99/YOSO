@@ -162,30 +162,63 @@ export default function App() {
       </header>
 
       <main className="max-w-4xl mx-auto px-4 py-6 flex-1 w-full">
-        {activeTab === 'home' && (
-          <HomeView 
-            examConfig={examConfig}
-            daysLeft={daysLeft}
-            setIsEditingExam={setIsEditingExam}
-            folders={folders}
-            questions={questions}
-            onSelectFolder={(id) => setSelectedFolderId(id)}
-            onSelectQuestion={(id) => setSelectedQuestionId(id)}
-            onOpenFolderModal={() => setShowFolderModal(true)}
+        {selectedQuestionId ? (
+          <QuestionDetailView 
+            question={questions.find(q => q.id === selectedQuestionId)} 
+            onBack={() => setSelectedQuestionId(null)}
+            userProfile={userProfile}
             onToggleLike={handleToggleLike}
-            onGoToCreate={() => setActiveTab('create')}
+            onPromptDelete={(qId) => setDeleteConfirmQId(qId)}
+            onAddComment={async (qId, text) => {
+              const q = questions.find(item => item.id === qId);
+              if (!q) return;
+              const qRef = doc(db, 'questions', qId);
+              const newComments = [...(q.comments || []), {
+                id: 'c_' + Date.now(),
+                user: userProfile?.name || "名無しユーザー",
+                avatar: userProfile?.avatar || "🎓",
+                text,
+                time: 'たった今'
+              }];
+              await updateDoc(qRef, { comments: newComments });
+            }}
           />
+        ) : (
+          <>
+            {activeTab === 'home' && (
+              <HomeView 
+                examConfig={examConfig}
+                daysLeft={daysLeft}
+                setIsEditingExam={setIsEditingExam}
+                folders={folders}
+                questions={questions}
+                onSelectFolder={(id) => setSelectedFolderId(id)}
+                onSelectQuestion={(id) => setSelectedQuestionId(id)}
+                onOpenFolderModal={() => setShowFolderModal(true)}
+                onToggleLike={handleToggleLike}
+                onGoToCreate={() => setActiveTab('create')}
+              />
+            )}
+            {activeTab === 'create' && (
+              <CreateQuestionView 
+                folders={folders}
+                defaultFolderId={selectedFolderId || (folders[0] ? folders[0].id : '')}
+                userProfile={userProfile}
+                onSuccess={() => setActiveTab('home')}
+              />
+            )}
+            {activeTab === 'timer' && <TimerView onSaveLog={(log) => setStudyLogs([log, ...studyLogs])} />}
+            {activeTab === 'records' && <RecordsView studyLogs={studyLogs} />}
+          </>
         )}
-        {activeTab === 'timer' && <TimerView onSaveLog={(log) => setStudyLogs([log, ...studyLogs])} />}
-        {activeTab === 'records' && <RecordsView studyLogs={studyLogs} />}
       </main>
 
       <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-amber-200/80 z-30 shadow-lg">
         <div className="max-w-md mx-auto flex justify-around py-2">
-          <NavButton active={activeTab === 'home'} icon={<Home className="w-5 h-5" />} label="ホーム" onClick={() => setActiveTab('home')} />
-          <NavButton active={activeTab === 'create'} icon={<PlusCircle className="w-5 h-5" />} label="投稿する" onClick={() => setActiveTab('create')} />
-          <NavButton active={activeTab === 'timer'} icon={<Clock className="w-5 h-5" />} label="タイマー" onClick={() => setActiveTab('timer')} />
-          <NavButton active={activeTab === 'records'} icon={<BarChart2 className="w-5 h-5" />} label="分析・記録" onClick={() => setActiveTab('records')} />
+          <NavButton active={activeTab === 'home'} icon={<Home className="w-5 h-5" />} label="ホーム" onClick={() => { setActiveTab('home'); setSelectedQuestionId(null); }} />
+          <NavButton active={activeTab === 'create'} icon={<PlusCircle className="w-5 h-5" />} label="投稿する" onClick={() => { setActiveTab('create'); setSelectedQuestionId(null); }} />
+          <NavButton active={activeTab === 'timer'} icon={<Clock className="w-5 h-5" />} label="タイマー" onClick={() => { setActiveTab('timer'); setSelectedQuestionId(null); }} />
+          <NavButton active={activeTab === 'records'} icon={<BarChart2 className="w-5 h-5" />} label="分析・記録" onClick={() => { setActiveTab('records'); setSelectedQuestionId(null); }} />
         </div>
       </nav>
 
@@ -202,15 +235,116 @@ export default function App() {
                 className="w-full border border-stone-300 rounded-xl p-2.5 text-sm outline-none"
               />
             </div>
-            <button 
-              onClick={() => setShowProfileModal(false)}
-              className="w-full bg-amber-600 text-white py-2 rounded-xl text-xs font-bold"
-            >
+            <button onClick={() => setShowProfileModal(false)} className="w-full bg-amber-600 text-white py-2 rounded-xl text-xs font-bold">
               保存する
             </button>
           </div>
         </div>
       )}
+
+      {showFolderModal && (
+        <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <form onSubmit={handleCreateFolder} className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl space-y-4">
+            <h3 className="text-lg font-bold text-stone-800">新規フォルダ作成</h3>
+            <input type="text" required value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} placeholder="フォルダ名" className="w-full border p-2.5 rounded-xl text-sm outline-none" />
+            <input type="text" value={newFolderDesc} onChange={(e) => setNewFolderDesc(e.target.value)} placeholder="説明（任意）" className="w-full border p-2.5 rounded-xl text-sm outline-none" />
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setShowFolderModal(false)} className="px-4 py-2 text-sm text-stone-600">キャンセル</button>
+              <button type="submit" className="bg-amber-600 text-white px-5 py-2 rounded-xl text-sm font-semibold">作成する</button>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CreateQuestionView({ folders, defaultFolderId, userProfile, onSuccess }) {
+  const [folderId, setFolderId] = useState(defaultFolderId);
+  const [subject, setSubject] = useState(SUBJECTS[0]);
+  const [title, setTitle] = useState('');
+  const [subQuestions, setSubQuestions] = useState([{ question: '', answer: '' }]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!title.trim()) return;
+
+    // 安全にデータを準備（プロフィール変更後もエラーにならない仕組み）
+    const newQuestion = {
+      folderId,
+      subject,
+      title,
+      author: userProfile?.name || "名無しユーザー",
+      avatar: userProfile?.avatar || "🎓",
+      customAvatar: userProfile?.customAvatar || null,
+      likes: 0,
+      likedByMe: false,
+      subQuestions,
+      comments: [],
+      createdAt: new Date().toLocaleDateString('ja-JP')
+    };
+
+    try {
+      await addDoc(collection(db, 'questions'), newQuestion);
+      alert('予想問題を投稿しました！');
+      onSuccess();
+    } catch (err) {
+      alert('投稿に失敗しました');
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="bg-white p-6 rounded-2xl space-y-4 shadow-sm border border-stone-200">
+      <h2 className="text-base font-bold text-stone-800 flex items-center gap-2">
+        <PlusCircle className="w-5 h-5 text-amber-600" /> 新しい予想問題を投稿する
+      </h2>
+      <div>
+        <label className="block text-xs font-semibold text-stone-500 mb-1">タイトル</label>
+        <input type="text" required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="例: 2学期中間・過去問パターン" className="w-full border p-2.5 rounded-xl text-sm outline-none" />
+      </div>
+      <div>
+        <label className="block text-xs font-semibold text-stone-500 mb-1">教科</label>
+        <select value={subject} onChange={(e) => setSubject(e.target.value)} className="w-full border p-2.5 rounded-xl text-sm outline-none">
+          {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+      </div>
+      <button type="submit" className="w-full bg-amber-600 text-white py-2.5 rounded-xl text-sm font-bold hover:bg-amber-700 transition">
+        予想問題を公開する
+      </button>
+    </form>
+  );
+}
+
+function QuestionDetailView({ question, onBack, userProfile, onToggleLike, onPromptDelete, onAddComment }) {
+  const [commentText, setCommentText] = useState('');
+
+  if (!question) return null;
+
+  return (
+    <div className="space-y-4">
+      <button onClick={onBack} className="flex items-center gap-1 text-xs font-bold text-amber-700">
+        <ArrowLeft className="w-4 h-4" /> 戻る
+      </button>
+      <div className="bg-white p-5 rounded-2xl border border-stone-200 space-y-3">
+        <span className="text-xs font-bold bg-amber-100 text-amber-800 px-2.5 py-1 rounded-md">{question.subject}</span>
+        <h2 className="text-lg font-bold text-stone-800">{question.title}</h2>
+        <p className="text-xs text-stone-400">投稿者: {question.author || '名無しユーザー'}</p>
+      </div>
+      <div className="bg-white p-5 rounded-2xl border border-stone-200 space-y-3">
+        <h3 className="font-bold text-sm">コメント</h3>
+        <div className="flex gap-2">
+          <input type="text" value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder="コメントを書く..." className="flex-1 border p-2 rounded-xl text-xs outline-none" />
+          <button onClick={() => { if (commentText) { onAddComment(question.id, commentText); setCommentText(''); } }} className="bg-amber-600 text-white px-4 py-2 rounded-xl text-xs font-bold">送信</button>
+        </div>
+        <div className="space-y-2 pt-2">
+          {(question.comments || []).map(c => (
+            <div key={c.id} className="text-xs bg-stone-50 p-2.5 rounded-xl">
+              <span className="font-bold text-stone-700">{c.user}: </span>
+              <span className="text-stone-600">{c.text}</span>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -259,6 +393,26 @@ function HomeView({ examConfig, daysLeft, setIsEditingExam, folders, questions, 
             <div key={f.id} onClick={() => onSelectFolder(f.id)} className="bg-white p-4 rounded-xl border border-stone-200 cursor-pointer">
               <h3 className="font-bold text-stone-800">{f.name}</h3>
               <p className="text-xs text-stone-500">{f.description}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <h2 className="text-base font-bold text-stone-800 mb-3">最新の予想問題</h2>
+        <div className="space-y-3">
+          {questions.map(q => (
+            <div key={q.id} onClick={() => onSelectQuestion(q.id)} className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm cursor-pointer space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-md">{q.subject}</span>
+              </div>
+              <h3 className="font-bold text-stone-800 text-base">{q.title}</h3>
+              <div className="flex justify-between items-center text-xs text-stone-500 border-t pt-2">
+                <span>投稿者: {q.author || '名無しユーザー'}</span>
+                <button onClick={(e) => { e.stopPropagation(); onToggleLike(q.id); }} className="flex items-center gap-1 font-semibold text-amber-700">
+                  <ThumbsUp className="w-3.5 h-3.5" /> {q.likes || 0}
+                </button>
+              </div>
             </div>
           ))}
         </div>
