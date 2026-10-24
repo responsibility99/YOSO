@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  BookOpen, Calendar, FolderPlus, Plus, ThumbsUp, 
-  MessageSquare, Home, PlusCircle, ArrowLeft, Camera, QrCode, X
+  BookOpen, FolderPlus, Plus, ThumbsUp, 
+  MessageSquare, Home, PlusCircle, ArrowLeft, Trash2
 } from 'lucide-react';
 import { db } from './firebase';
 import { 
@@ -98,6 +98,19 @@ export default function App() {
     }
   };
 
+  // 🗑️ 予想問題を削除する機能
+  const handleDeleteQuestion = async (qId) => {
+    if (window.confirm('この予想問題を削除しますか？')) {
+      try {
+        await deleteDoc(doc(db, 'questions', qId));
+        setSelectedQuestionId(null);
+        alert('削除しました');
+      } catch (err) {
+        alert('削除に失敗しました');
+      }
+    }
+  };
+
   return (
     <div className="min-h-screen bg-amber-50/40 text-stone-800 flex flex-col font-sans pb-24 md:pb-8">
       <header className="bg-white border-b border-amber-200/60 sticky top-0 z-30 shadow-sm">
@@ -130,7 +143,7 @@ export default function App() {
           <QuestionDetailView 
             question={questions.find(q => q.id === selectedQuestionId)} 
             onBack={() => setSelectedQuestionId(null)}
-            userProfile={userProfile}
+            onDelete={handleDeleteQuestion}
             onAddComment={async (qId, text) => {
               const q = questions.find(item => item.id === qId);
               if (!q) return;
@@ -234,7 +247,6 @@ function CreateQuestionView({ folders, defaultFolderId, userProfile, onSuccess }
     e.preventDefault();
     if (!title.trim()) return;
 
-    // 安全対策（プロフィールを変更してもundefinedエラーにならない）
     const newQuestion = {
       folderId,
       subject,
@@ -303,16 +315,23 @@ function CreateQuestionView({ folders, defaultFolderId, userProfile, onSuccess }
   );
 }
 
-function QuestionDetailView({ question, onBack, onAddComment }) {
+function QuestionDetailView({ question, onBack, onDelete, onAddComment }) {
   const [commentText, setCommentText] = useState('');
 
   if (!question) return null;
 
   return (
     <div className="space-y-4">
-      <button onClick={onBack} className="flex items-center gap-1 text-xs font-bold text-amber-700">
-        <ArrowLeft className="w-4 h-4" /> 戻る
-      </button>
+      <div className="flex justify-between items-center">
+        <button onClick={onBack} className="flex items-center gap-1 text-xs font-bold text-amber-700">
+          <ArrowLeft className="w-4 h-4" /> 戻る
+        </button>
+        {/* 削除ボタン */}
+        <button onClick={() => onDelete(question.id)} className="flex items-center gap-1 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-lg transition">
+          <Trash2 className="w-3.5 h-3.5" /> 投稿を削除
+        </button>
+      </div>
+
       <div className="bg-white p-5 rounded-2xl border border-stone-200 space-y-3">
         <span className="text-xs font-bold bg-amber-100 text-amber-800 px-2.5 py-1 rounded-md">{question.subject}</span>
         <h2 className="text-lg font-bold text-stone-800">{question.title}</h2>
@@ -398,21 +417,3 @@ function HomeView({ examConfig, daysLeft, folders, questions, onSelectFolder, on
 
       <div>
         <h2 className="text-base font-bold text-stone-800 mb-3">最新の予想問題</h2>
-        <div className="space-y-3">
-          {questions.map(q => (
-            <div key={q.id} onClick={() => onSelectQuestion(q.id)} className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm cursor-pointer space-y-2">
-              <span className="text-xs font-bold bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-md">{q.subject}</span>
-              <h3 className="font-bold text-stone-800 text-base">{q.title}</h3>
-              <div className="flex justify-between items-center text-xs text-stone-500 border-t pt-2">
-                <span>投稿者: {q.author || '名無しユーザー'}</span>
-                <button onClick={(e) => { e.stopPropagation(); onToggleLike(q.id); }} className="flex items-center gap-1 font-semibold text-amber-700">
-                  <ThumbsUp className="w-3.5 h-3.5" /> {q.likes || 0}
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
