@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  BookOpen, Clock, FolderPlus, ThumbsUp, 
-  Home, PlusCircle, BarChart2, ArrowLeft, Trash2, Calendar, Sparkles,
+  BookOpen, FolderPlus, ThumbsUp, 
+  Home, PlusCircle, ArrowLeft, Trash2, Calendar, Sparkles,
   MessageCircle, Send, Trophy, Medal, Flame, KeyRound, LogOut,
   ImagePlus, X, HelpCircle, Edit
 } from 'lucide-react';
@@ -11,9 +11,6 @@ import {
 } from 'firebase/firestore';
 import './index.css';
 
-import TimerView from './components/TimerView';
-import RecordsView from './components/RecordsView';
-
 const SUBJECTS = [
   '国語1', '国語２a', '国語２ｂ', '歴史', '地理', 
   '数学Ａ', '数学Ｂ', '化学', '生物', '地学', 
@@ -21,9 +18,6 @@ const SUBJECTS = [
 ];
 
 const BADGES = [
-  { id: 't1', icon: '🐣', name: 'ひよこ', desc: 'タイマー記録1回', type: 'totalStudySessions', req: 1 },
-  { id: 't2', icon: '⏱️', name: '時計の友', desc: 'タイマー記録5回', type: 'totalStudySessions', req: 5 },
-  { id: 't3', icon: '🕰️', name: '時の支配者', desc: 'タイマー記録20回', type: 'totalStudySessions', req: 20 },
   { id: 'p1', icon: '🌱', name: '初投稿', desc: '問題を1回投稿', type: 'totalPosts', req: 1 },
   { id: 'p2', icon: '🛠️', name: '問題職人', desc: '問題を5回投稿', type: 'totalPosts', req: 5 },
   { id: 'c1', icon: '👋', name: '初めまして', desc: 'チャット1回送信', type: 'totalChats', req: 1 },
@@ -38,11 +32,11 @@ export default function App() {
   const [selectedQuestionId, setSelectedQuestionId] = useState(null);
 
   const [userProfile, setUserProfile] = useState(() => {
-    const saved = localStorage.getItem('study_app_user_v6');
+    const saved = localStorage.getItem('study_app_user_v7');
     const defaultUid = 'user_' + Date.now() + Math.floor(Math.random()*1000);
     return saved ? JSON.parse(saved) : { 
       uid: defaultUid, name: 'テスト対策生', avatar: '🎓', testDate: '',
-      xp: 0, level: 1, totalStudySessions: 0, totalPosts: 0, totalChats: 0, secretCode: '' 
+      xp: 0, level: 1, totalPosts: 0, totalChats: 0, secretCode: '' 
     };
   });
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -53,13 +47,7 @@ export default function App() {
   const [folders, setFolders] = useState([]);
   const [newFolderName, setNewFolderName] = useState('');
   const [showFolderModal, setShowFolderModal] = useState(false);
-  const [showManualLogModal, setShowManualLogModal] = useState(false);
-  const [manualLog, setManualLog] = useState({ subject: SUBJECTS[0], minutes: 30 });
   const [questions, setQuestions] = useState([]);
-  const [studyLogs, setStudyLogs] = useState(() => {
-    const saved = localStorage.getItem('study_app_logs_v6');
-    return saved ? JSON.parse(saved) : [];
-  });
   const [leaderboard, setLeaderboard] = useState([]);
 
   useEffect(() => {
@@ -91,14 +79,13 @@ export default function App() {
   }, [userProfile.secretCode]);
 
   useEffect(() => {
-    localStorage.setItem('study_app_user_v6', JSON.stringify(userProfile));
-    localStorage.setItem('study_app_logs_v6', JSON.stringify(studyLogs));
+    localStorage.setItem('study_app_user_v7', JSON.stringify(userProfile));
     
     if (userProfile.uid && userProfile.secretCode) {
       const userRef = doc(db, 'users', userProfile.uid);
       setDoc(userRef, userProfile, { merge: true }).catch(e => console.error(e));
     }
-  }, [userProfile, studyLogs]);
+  }, [userProfile]);
 
   const gainXP = (amount, statToIncrement) => {
     setUserProfile(prev => {
@@ -140,12 +127,6 @@ export default function App() {
     try {
       await updateDoc(doc(db, 'questions', qId), { likes: q.likedByMe ? (q.likes - 1) : (q.likes + 1), likedByMe: !q.likedByMe });
     } catch (err) {}
-  };
-
-  const handleSaveStudyLog = (logData) => {
-    setStudyLogs([{ id: 'log_' + Date.now(), ...logData }, ...studyLogs]);
-    gainXP(30, 'totalStudySessions');
-    setActiveTab('records');
   };
 
   if (!userProfile.secretCode) {
@@ -230,13 +211,6 @@ export default function App() {
             {activeTab === 'home' && <HomeView folders={folders} questions={questions} onSelectQuestion={setSelectedQuestionId} onOpenFolderModal={() => setShowFolderModal(true)} onToggleLike={handleToggleLike} secretCode={userProfile.secretCode} selectedFolderId={selectedFolderId} onSelectFolder={setSelectedFolderId} />}
             {activeTab === 'create' && <CreateQuestionView folders={folders} defaultFolderId={selectedFolderId || (folders[0]?.id || '')} userProfile={userProfile} onSuccess={() => { gainXP(50, 'totalPosts'); setActiveTab('home'); }} />}
             {activeTab === 'chat' && <ChatView userProfile={userProfile} onMessageSent={() => gainXP(10, 'totalChats')} />}
-            {activeTab === 'timer' && <TimerView onSaveLog={handleSaveStudyLog} />}
-            {activeTab === 'records' && (
-              <div className="space-y-4">
-                <div className="flex justify-end"><button onClick={() => setShowManualLogModal(true)} className="bg-gradient-to-r from-amber-400 to-orange-400 text-white px-5 py-2.5 rounded-full shadow-md text-sm font-extrabold flex items-center gap-1.5"><PlusCircle className="w-4 h-4"/> 手持記録</button></div>
-                <RecordsView studyLogs={studyLogs} onClearLogs={() => setStudyLogs([])} />
-              </div>
-            )}
             {activeTab === 'ranking' && <RankingView leaderboard={leaderboard} currentUid={userProfile.uid} />}
           </>
         )}
@@ -247,8 +221,6 @@ export default function App() {
         <NavButton active={activeTab === 'create'} icon={<PlusCircle className="w-6 h-6" />} label="投稿" onClick={() => { setActiveTab('create'); setSelectedQuestionId(null); }} />
         <NavButton active={activeTab === 'chat'} icon={<MessageCircle className="w-6 h-6" />} label="チャット" onClick={() => { setActiveTab('chat'); setSelectedQuestionId(null); }} />
         <NavButton active={activeTab === 'ranking'} icon={<Trophy className="w-6 h-6" />} label="ランキング" onClick={() => { setActiveTab('ranking'); setSelectedQuestionId(null); }} />
-        <NavButton active={activeTab === 'records'} icon={<BarChart2 className="w-6 h-6" />} label="記録" onClick={() => { setActiveTab('records'); setSelectedQuestionId(null); }} />
-        <NavButton active={activeTab === 'timer'} icon={<Clock className="w-6 h-6" />} label="タイマー" onClick={() => { setActiveTab('timer'); setSelectedQuestionId(null); }} />
       </nav>
 
       {/* ヘルプモーダル */}
@@ -269,7 +241,7 @@ export default function App() {
               </div>
               <div className="bg-yellow-50 p-4 rounded-2xl border border-yellow-100">
                 <h4 className="text-yellow-800 font-extrabold mb-1">🏆 XPとレベル・バッジ</h4>
-                <p className="text-xs">タイマーを使ったり、問題を投稿・コメントするとXP（経験値）が貯まりレベルアップ！条件を満たすとバッジも貰えます。</p>
+                <p className="text-xs">問題を投稿・コメントするとXP（経験値）が貯まりレベルアップ！条件を満たすとバッジも貰えます。</p>
               </div>
               <div className="bg-stone-50 p-4 rounded-2xl border border-stone-200">
                 <h4 className="text-stone-800 font-extrabold mb-1">💬 チャット機能</h4>
@@ -280,18 +252,6 @@ export default function App() {
               <button onClick={() => setShowHelpModal(false)} className="w-full bg-amber-500 text-white py-3 rounded-xl text-sm font-extrabold shadow-lg">閉じる</button>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* 手動記録モーダル */}
-      {showManualLogModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <form onSubmit={(e) => { e.preventDefault(); handleSaveStudyLog({ subject: manualLog.subject, duration: manualLog.minutes * 60, date: new Date().toLocaleDateString('ja-JP') }); setShowManualLogModal(false); }} className="bg-white p-6 rounded-3xl max-w-sm w-full space-y-4 shadow-2xl">
-            <h3 className="font-extrabold text-lg text-amber-900">手動で記録を追加</h3>
-            <select value={manualLog.subject} onChange={e => setManualLog({ ...manualLog, subject: e.target.value })} className="w-full border-2 border-stone-200 p-2.5 rounded-xl text-sm font-bold outline-none">{SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}</select>
-            <input type="number" min="1" required value={manualLog.minutes} onChange={e => setManualLog({ ...manualLog, minutes: e.target.value })} placeholder="分数" className="w-full border-2 border-stone-200 p-3 rounded-xl text-sm font-bold outline-none" />
-            <div className="flex justify-end gap-2"><button type="button" onClick={() => setShowManualLogModal(false)} className="px-4 py-2 text-sm font-bold text-stone-500">キャンセル</button><button type="submit" className="bg-amber-500 text-white px-5 py-2 rounded-xl text-sm font-bold shadow-md">記録</button></div>
-          </form>
         </div>
       )}
 
