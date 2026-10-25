@@ -3,7 +3,7 @@ import {
   BookOpen, FolderPlus, ThumbsUp, 
   Home, PlusCircle, ArrowLeft, Trash2, Calendar, Sparkles,
   MessageCircle, Send, Trophy, Medal, Flame, KeyRound, LogOut,
-  ImagePlus, X, HelpCircle, Edit
+  ImagePlus, X, HelpCircle, Edit, QrCode, Share2
 } from 'lucide-react';
 import { db } from './firebase';
 import { 
@@ -41,6 +41,7 @@ export default function App() {
   });
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showQrModal, setShowQrModal] = useState(false);
   const [showLevelUp, setShowLevelUp] = useState(false);
   const [tempCode, setTempCode] = useState('');
 
@@ -164,6 +165,9 @@ export default function App() {
         </div>
         
         <div className="flex items-center gap-2">
+          <button onClick={() => setShowQrModal(true)} className="bg-white/90 hover:bg-white text-orange-600 p-2 rounded-full shadow-md transition transform hover:scale-105">
+            <QrCode className="w-5 h-5" />
+          </button>
           <button onClick={() => setShowHelpModal(true)} className="bg-white/90 hover:bg-white text-amber-600 p-2 rounded-full shadow-md transition transform hover:scale-105">
             <HelpCircle className="w-5 h-5" />
           </button>
@@ -208,7 +212,7 @@ export default function App() {
           />
         ) : (
           <>
-            {activeTab === 'home' && <HomeView folders={folders} questions={questions} onSelectQuestion={setSelectedQuestionId} onOpenFolderModal={() => setShowFolderModal(true)} onToggleLike={handleToggleLike} secretCode={userProfile.secretCode} selectedFolderId={selectedFolderId} onSelectFolder={setSelectedFolderId} />}
+            {activeTab === 'home' && <HomeView folders={folders} questions={questions} onSelectQuestion={setSelectedQuestionId} onOpenFolderModal={() => setShowFolderModal(true)} onToggleLike={handleToggleLike} secretCode={userProfile.secretCode} selectedFolderId={selectedFolderId} onSelectFolder={setSelectedFolderId} onOpenQr={() => setShowQrModal(true)} />}
             {activeTab === 'create' && <CreateQuestionView folders={folders} defaultFolderId={selectedFolderId || (folders[0]?.id || '')} userProfile={userProfile} onSuccess={() => { gainXP(50, 'totalPosts'); setActiveTab('home'); }} />}
             {activeTab === 'chat' && <ChatView userProfile={userProfile} onMessageSent={() => gainXP(10, 'totalChats')} />}
             {activeTab === 'ranking' && <RankingView leaderboard={leaderboard} currentUid={userProfile.uid} />}
@@ -223,6 +227,40 @@ export default function App() {
         <NavButton active={activeTab === 'ranking'} icon={<Trophy className="w-6 h-6" />} label="ランキング" onClick={() => { setActiveTab('ranking'); setSelectedQuestionId(null); }} />
       </nav>
 
+      {/* QRコード招待モーダル (API画像方式) */}
+      {showQrModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white p-6 rounded-3xl max-w-sm w-full shadow-2xl flex flex-col items-center text-center space-y-4">
+            <h3 className="font-extrabold text-lg text-amber-900 flex items-center gap-2">
+              <QrCode className="w-5 h-5 text-orange-500" /> グループに友達を招待
+            </h3>
+            <p className="text-xs font-bold text-stone-500">カメラで読み取って同じ合言葉で参加しよう！</p>
+            
+            <div className="bg-amber-50 p-4 rounded-2xl border-2 border-amber-200 shadow-inner my-2 flex items-center justify-center">
+              <img 
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(userProfile.secretCode)}`} 
+                alt="招待QRコード" 
+                className="w-44 h-44 rounded-lg shadow-sm"
+              />
+            </div>
+
+            <div className="bg-stone-100 px-4 py-2 rounded-xl text-sm font-extrabold text-stone-700 w-full flex items-center justify-between">
+              <span className="text-stone-400 text-xs">合言葉:</span>
+              <span className="text-amber-600 font-black text-base">{userProfile.secretCode}</span>
+            </div>
+
+            <div className="w-full pt-2 flex gap-2">
+              <button onClick={() => { navigator.clipboard?.writeText(userProfile.secretCode); alert('合言葉をコピーしました！'); }} className="flex-1 bg-amber-100 hover:bg-amber-200 text-amber-800 py-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1">
+                <Share2 className="w-4 h-4" /> 合言葉コピー
+              </button>
+              <button onClick={() => setShowQrModal(false)} className="flex-1 bg-amber-500 text-white py-3 rounded-xl text-xs font-extrabold shadow-md">
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ヘルプモーダル */}
       {showHelpModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
@@ -233,7 +271,7 @@ export default function App() {
             <div className="overflow-y-auto pr-2 space-y-4 flex-1 text-sm font-bold text-stone-700">
               <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100">
                 <h4 className="text-amber-800 font-extrabold mb-1">🔑 グループ（合言葉）</h4>
-                <p className="text-xs">同じ合言葉を入力した人同士で、問題やチャットが共有されます。退出・変更は右上のプロフィールから行えます。</p>
+                <p className="text-xs">同じ合言葉を入力した人同士で、問題やチャットが共有されます。画面右上のQRボタンから簡単に招待できます。</p>
               </div>
               <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100">
                 <h4 className="text-orange-800 font-extrabold mb-1">✍️ 問題の投稿・解答・編集</h4>
@@ -460,7 +498,7 @@ function CreateQuestionView({ folders, defaultFolderId, userProfile, onSuccess }
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!subQuestions[0].question.trim()) return; // 1問目が空なら投稿しない
+    if (!subQuestions[0].question.trim()) return;
     try {
       await addDoc(collection(db, 'questions'), {
         folderId, subject, author: userProfile.name, avatar: userProfile.avatar, uid: userProfile.uid, secretCode: userProfile.secretCode,
@@ -585,7 +623,7 @@ function QuestionDetailView({ question, currentUid, onBack, onDelete, onUpdate, 
   );
 }
 
-function HomeView({ folders, questions, onSelectQuestion, onOpenFolderModal, onToggleLike, secretCode, selectedFolderId, onSelectFolder }) {
+function HomeView({ folders, questions, onSelectQuestion, onOpenFolderModal, onToggleLike, secretCode, selectedFolderId, onSelectFolder, onOpenQr }) {
   const displayQuestions = selectedFolderId ? questions.filter(q => q.folderId === selectedFolderId) : questions;
   const selectedFolder = folders.find(f => f.id === selectedFolderId);
 
@@ -593,6 +631,9 @@ function HomeView({ folders, questions, onSelectQuestion, onOpenFolderModal, onT
     <div className="space-y-8">
       <div className="bg-orange-100 border-2 border-orange-200 p-3 rounded-xl flex items-center justify-between text-sm font-extrabold text-orange-800">
         <div className="flex items-center gap-2"><KeyRound className="w-4 h-4"/> 参加中の合言葉: <span className="bg-white px-2 py-0.5 rounded-md">{secretCode}</span></div>
+        <button onClick={onOpenQr} className="text-xs bg-white text-orange-700 px-3 py-1 rounded-lg border border-orange-300 hover:bg-orange-50 transition flex items-center gap-1 shadow-sm">
+          <QrCode className="w-3.5 h-3.5" /> 招待QR
+        </button>
       </div>
       
       {!selectedFolderId ? (
