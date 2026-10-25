@@ -456,15 +456,14 @@ function ChatView({ userProfile, onMessageSent }) {
 function CreateQuestionView({ folders, defaultFolderId, userProfile, onSuccess }) {
   const [folderId, setFolderId] = useState(defaultFolderId);
   const [subject, setSubject] = useState(SUBJECTS[0]);
-  const [title, setTitle] = useState('');
   const [subQuestions, setSubQuestions] = useState([{ question: '', answer: '' }]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    if (!subQuestions[0].question.trim()) return; // 1問目が空なら投稿しない
     try {
       await addDoc(collection(db, 'questions'), {
-        folderId, subject, title, author: userProfile.name, avatar: userProfile.avatar, uid: userProfile.uid, secretCode: userProfile.secretCode,
+        folderId, subject, author: userProfile.name, avatar: userProfile.avatar, uid: userProfile.uid, secretCode: userProfile.secretCode,
         likes: 0, likedByMe: false, subQuestions, comments: [], createdAt: new Date().toLocaleDateString('ja-JP')
       });
       onSuccess();
@@ -477,14 +476,13 @@ function CreateQuestionView({ folders, defaultFolderId, userProfile, onSuccess }
       <div className="bg-stone-50 p-4 rounded-2xl space-y-4 border border-stone-100">
         <select value={folderId} onChange={e => setFolderId(e.target.value)} className="w-full border-2 border-stone-200 p-2.5 rounded-xl text-sm bg-white font-bold outline-none">{folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select>
         <select value={subject} onChange={e => setSubject(e.target.value)} className="w-full border-2 border-stone-200 p-2.5 rounded-xl text-sm bg-white font-bold outline-none">{SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}</select>
-        <input type="text" required value={title} onChange={e => setTitle(e.target.value)} placeholder="タイトル (例: 中間テスト対策 漢字10問)" className="w-full border-2 border-stone-200 p-2.5 rounded-xl text-sm font-bold outline-none" />
       </div>
       <div className="space-y-3">
         {subQuestions.map((sq, i) => (
           <div key={i} className="p-4 bg-orange-50 rounded-2xl space-y-2 border relative">
             <div className="absolute top-2 right-2 text-xs font-bold text-orange-300">Q{i+1}</div>
-            <input type="text" value={sq.question} onChange={e => { const newSq = [...subQuestions]; newSq[i].question = e.target.value; setSubQuestions(newSq); }} placeholder="問題を入力" className="w-full border-2 border-orange-100 p-2.5 rounded-xl text-sm font-bold outline-none" />
-            <input type="text" value={sq.answer} onChange={e => { const newSq = [...subQuestions]; newSq[i].answer = e.target.value; setSubQuestions(newSq); }} placeholder="解答を入力" className="w-full border-2 border-rose-100 p-2.5 rounded-xl text-sm font-bold outline-none text-rose-700" />
+            <input type="text" required value={sq.question} onChange={e => { const newSq = [...subQuestions]; newSq[i].question = e.target.value; setSubQuestions(newSq); }} placeholder="問題を入力" className="w-full border-2 border-orange-100 p-2.5 rounded-xl text-sm font-bold outline-none" />
+            <input type="text" required value={sq.answer} onChange={e => { const newSq = [...subQuestions]; newSq[i].answer = e.target.value; setSubQuestions(newSq); }} placeholder="解答を入力" className="w-full border-2 border-rose-100 p-2.5 rounded-xl text-sm font-bold outline-none text-rose-700" />
           </div>
         ))}
         <button type="button" onClick={() => setSubQuestions([...subQuestions, { question: '', answer: '' }])} className="w-full py-3 border-2 border-dashed border-amber-300 text-amber-700 rounded-2xl text-sm font-bold">+ 問題を追加する</button>
@@ -499,13 +497,11 @@ function QuestionDetailView({ question, currentUid, onBack, onDelete, onUpdate, 
   const [showAnswers, setShowAnswers] = useState({});
   const [isEditing, setIsEditing] = useState(false);
   
-  const [editTitle, setEditTitle] = useState('');
   const [editSubject, setEditSubject] = useState('');
   const [editSubQuestions, setEditSubQuestions] = useState([]);
 
   useEffect(() => {
     if (question && !isEditing) {
-      setEditTitle(question.title);
       setEditSubject(question.subject);
       setEditSubQuestions(JSON.parse(JSON.stringify(question.subQuestions || [])));
     }
@@ -514,9 +510,7 @@ function QuestionDetailView({ question, currentUid, onBack, onDelete, onUpdate, 
   if (!question) return null;
 
   const handleSaveEdit = () => {
-    if (!editTitle.trim()) return;
     onUpdate(question.id, {
-      title: editTitle,
       subject: editSubject,
       subQuestions: editSubQuestions
     });
@@ -532,7 +526,6 @@ function QuestionDetailView({ question, currentUid, onBack, onDelete, onUpdate, 
         </div>
         <div className="bg-stone-50 p-4 rounded-2xl space-y-4 border border-stone-100">
           <select value={editSubject} onChange={e => setEditSubject(e.target.value)} className="w-full border-2 border-stone-200 p-2.5 rounded-xl text-sm bg-white font-bold outline-none">{SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}</select>
-          <input type="text" required value={editTitle} onChange={e => setEditTitle(e.target.value)} placeholder="タイトル" className="w-full border-2 border-stone-200 p-2.5 rounded-xl text-sm font-bold outline-none" />
         </div>
         <div className="space-y-3">
           {editSubQuestions.map((sq, i) => (
@@ -564,8 +557,7 @@ function QuestionDetailView({ question, currentUid, onBack, onDelete, onUpdate, 
       <div className="bg-white p-6 rounded-3xl border shadow-xl space-y-4 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-amber-300 to-rose-300"></div>
         <div className="inline-block px-3 py-1 bg-amber-100 text-amber-800 text-xs font-extrabold rounded-lg">{question.subject}</div>
-        <h2 className="text-2xl font-extrabold text-stone-800">{question.title}</h2>
-        <div className="space-y-3 pt-4 border-t">
+        <div className="space-y-3 pt-4">
           {(question.subQuestions || []).map((sq, i) => (
             <div key={i} className="p-4 bg-stone-50 border rounded-2xl shadow-sm">
               <p className="font-extrabold text-sm text-stone-700 mb-3"><span className="text-amber-500 mr-1">Q{i+1}.</span> {sq.question}</p>
@@ -631,7 +623,7 @@ function HomeView({ folders, questions, onSelectQuestion, onOpenFolderModal, onT
             {displayQuestions.map(q => (
               <div key={q.id} onClick={() => onSelectQuestion(q.id)} className="bg-white p-5 rounded-3xl border shadow-md cursor-pointer">
                 <span className="text-[10px] font-extrabold bg-amber-100 text-amber-800 px-2.5 py-1 rounded-md">{q.subject}</span>
-                <h3 className="font-extrabold text-lg text-stone-800 mt-2">{q.title}</h3>
+                <h3 className="font-extrabold text-lg text-stone-800 mt-2 truncate">{q.subQuestions?.[0]?.question || '無題の問題'}</h3>
                 <div className="flex justify-between items-center text-xs border-t pt-3 mt-3">
                   <span className="font-bold text-stone-400">作成: {q.author}</span>
                   <button onClick={(e) => { e.stopPropagation(); onToggleLike(q.id); }} className={`flex items-center gap-1.5 font-extrabold px-3 py-1.5 rounded-full ${q.likedByMe ? 'bg-rose-100 text-rose-600' : 'bg-stone-50 text-stone-500'}`}><ThumbsUp className="w-4 h-4" /> {q.likes || 0}</button>
