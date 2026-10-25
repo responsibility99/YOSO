@@ -32,7 +32,7 @@ export default function App() {
   const [selectedQuestionId, setSelectedQuestionId] = useState(null);
 
   const [userProfile, setUserProfile] = useState(() => {
-    const saved = localStorage.getItem('study_app_user_v7');
+    const saved = localStorage.getItem('study_app_user_v6');
     const defaultUid = 'user_' + Date.now() + Math.floor(Math.random()*1000);
     return saved ? JSON.parse(saved) : { 
       uid: defaultUid, name: 'テスト対策生', avatar: '🎓', testDate: '',
@@ -79,7 +79,7 @@ export default function App() {
   }, [userProfile.secretCode]);
 
   useEffect(() => {
-    localStorage.setItem('study_app_user_v7', JSON.stringify(userProfile));
+    localStorage.setItem('study_app_user_v6', JSON.stringify(userProfile));
     
     if (userProfile.uid && userProfile.secretCode) {
       const userRef = doc(db, 'users', userProfile.uid);
