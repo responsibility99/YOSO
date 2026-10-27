@@ -5,18 +5,30 @@ import {
 } from 'lucide-react';
 import { db } from './firebase';
 import { 
-  collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, serverTimestamp, setDoc, query, orderBy
+  collection, onSnapshot, addDoc, doc, updateDoc, serverTimestamp, setDoc, query, orderBy
 } from 'firebase/firestore';
 import './index.css';
 
-// 分割したコンポーネントの読み込み
+// 分割コンポーネントの読み込み
 import BossBattle, { INITIAL_BOSSES, SUBJECTS } from './components/BossBattle';
 import QuestionDetailView, { FlashcardView } from './components/QuestionDetailView';
+import UserProfileModal from './components/UserProfileModal';
+import FolderAndHitManager from './components/FolderAndHitManager';
 
 const ADMIN_PASSWORD = 'admin123';
 
+const BADGES = [
+  { id: 'p1', icon: '🌱', name: '初投稿', desc: '問題を1回投稿', type: 'totalPosts', req: 1 },
+  { id: 'p2', icon: '🛠️', name: '問題職人', desc: '問題を5回投稿', type: 'totalPosts', req: 5 },
+  { id: 'c1', icon: '👋', name: '初めまして', desc: 'チャット1回送信', type: 'totalChats', req: 1 },
+  { id: 'c2', icon: '💬', name: 'おしゃべり', desc: 'チャット10回送信', type: 'totalChats', req: 10 },
+  { id: 'l1', icon: '🥉', name: 'ルーキー', desc: 'レベル5到達', type: 'level', req: 5 },
+  { id: 'h1', icon: '🎯', name: '神予想屋', desc: '的中した問題がある', type: 'hitCount', req: 1 },
+];
+
 export default function App() {
   const [activeTab, setActiveTab] = useState('home');
+  const [selectedFolderId, setSelectedFolderId] = useState(null);
   const [selectedQuestionId, setSelectedQuestionId] = useState(null);
   const [isFlashcardMode, setIsFlashcardMode] = useState(false);
 
@@ -24,8 +36,8 @@ export default function App() {
     const saved = localStorage.getItem('study_app_user_v6');
     const defaultUid = 'user_' + Date.now() + Math.floor(Math.random()*1000);
     return saved ? JSON.parse(saved) : { 
-      uid: defaultUid, name: '開成チャレンジャー', avatar: '⚔️',
-      xp: 0, level: 1, totalPosts: 0, totalChats: 0, secretCode: ''
+      uid: defaultUid, name: '開成チャレンジャー', avatar: '⚔️', testDate: '',
+      xp: 0, level: 1, totalPosts: 0, totalChats: 0, hitCount: 0, secretCode: ''
     };
   });
 
@@ -37,13 +49,24 @@ export default function App() {
   const [showMenuDrawer, setShowMenuDrawer] = useState(false);
   const [tempCode, setTempCode] = useState('');
 
+  const [folders, setFolders] = useState([]);
   const [questions, setQuestions] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
   const [historyList, setHistoryList] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [bossData, setBossData] = useState(INITIAL_BOSSES[0]);
 
-  // データ同期: 予想問題
+  // Firestore: フォルダ一覧
+  useEffect(() => {
+    if (!userProfile.secretCode) return;
+    const unsub = onSnapshot(collection(db, 'folders'), (snapshot) => {
+      const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      setFolders(data.filter(d => d.secretCode === userProfile.secretCode));
+    });
+    return () => unsub();
+  }, [userProfile.secretCode]);
+
+  // Firestore: 問題一覧
   useEffect(() => {
     if (!userProfile.secretCode) return;
     const unsub = onSnapshot(collection(db, 'questions'), (snapshot) => {
@@ -53,7 +76,7 @@ export default function App() {
     return () => unsub();
   }, [userProfile.secretCode]);
 
-  // データ同期: メンバー＆ランキング
+  // Firestore: ユーザー順位・追放チェック
   useEffect(() => {
     if (!userProfile.secretCode) return;
     const q = query(collection(db, 'users'), orderBy('xp', 'desc'));
@@ -71,7 +94,7 @@ export default function App() {
     return () => unsub();
   }, [userProfile.secretCode, userProfile.uid]);
 
-  // データ同期: アプリの歴史
+  // Firestore: アプリの歴史
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'app_history'), (snapshot) => {
       const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -81,7 +104,7 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // ローカルストレージ & Firebase 同期
+  // ローカル & DB 同期
   useEffect(() => {
     localStorage.setItem('study_app_user_v6', JSON.stringify(userProfile));
     if (userProfile.uid && userProfile.secretCode) {
@@ -89,7 +112,7 @@ export default function App() {
     }
   }, [userProfile]);
 
-  // XP獲得ロジック
+  // XP & レベル計算
   const gainXP = (amount, statKey) => {
     setUserProfile(prev => {
       const newXp = (prev.xp || 0) + amount;
@@ -100,7 +123,7 @@ export default function App() {
     });
   };
 
-  // メンバー追放 (管理者)
+  // メンバー追放
   const handleKickUser = async (targetUid) => {
     if (!isAdmin) return;
     if (window.confirm('このユーザーを追放しますか？')) {
@@ -111,7 +134,7 @@ export default function App() {
     }
   };
 
-  // 合言葉未入力時の画面
+  // ルーム未参加時の表示
   if (!userProfile.secretCode) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
@@ -121,7 +144,7 @@ export default function App() {
           </div>
           <h1 className="text-2xl font-black text-amber-400">YOSO BATTLE</h1>
           <p className="text-xs font-bold text-slate-400 leading-relaxed">
-            クラスの仲間と同じ合言葉を入力して<br/>予想問題バトルを開始しよう！
+            同じ合言葉を入力して<br/>クラスメイトとバトルを開始しよう！
           </p>
           <form onSubmit={(e) => { e.preventDefault(); if(tempCode.trim()) setUserProfile({...userProfile, secretCode: tempCode.trim()}); }}>
             <input 
@@ -180,8 +203,8 @@ export default function App() {
         </div>
       )}
 
-      {/* メインエリア */}
-      <main className="max-w-4xl mx-auto p-4 flex-1 w-full">
+      {/* メインビュー */}
+      <main className="max-w-4xl mx-auto p-4 flex-1 w-full space-y-6">
         {selectedQuestionId ? (
           <QuestionDetailView 
             question={questions.find(q => q.id === selectedQuestionId)} 
@@ -204,15 +227,28 @@ export default function App() {
         ) : (
           <>
             {activeTab === 'home' && (
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <h2 className="text-base font-black text-slate-200">ボス討伐 & スキルカード一覧</h2>
-                  <button onClick={() => setIsFlashcardMode(true)} className="bg-slate-800 border border-slate-700 text-amber-400 px-3 py-1.5 rounded-xl text-xs font-black hover:bg-slate-700">🎴 単語帳モード</button>
-                </div>
+              <div className="space-y-6">
                 <BossBattle bossData={bossData} questions={questions} onSelectQuestion={setSelectedQuestionId} />
+                
+                <div className="pt-2 border-t border-slate-800 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-sm font-black text-slate-200">📁 デッキフォルダ & 予想カード一覧</h3>
+                    <button onClick={() => setIsFlashcardMode(true)} className="bg-slate-800 border border-slate-700 text-amber-400 px-3 py-1.5 rounded-xl text-xs font-black hover:bg-slate-700">🎴 単語帳モード</button>
+                  </div>
+                  
+                  <FolderAndHitManager 
+                    folders={folders}
+                    questions={questions}
+                    selectedFolderId={selectedFolderId}
+                    onSelectFolder={setSelectedFolderId}
+                    onSelectQuestion={setSelectedQuestionId}
+                    userProfile={userProfile}
+                    gainXP={gainXP}
+                  />
+                </div>
               </div>
             )}
-            {activeTab === 'create' && <CreateCardView userProfile={userProfile} onSuccess={() => { gainXP(50, 'totalPosts'); setActiveTab('home'); }} />}
+            {activeTab === 'create' && <CreateCardView folders={folders} userProfile={userProfile} onSuccess={() => { gainXP(50, 'totalPosts'); setActiveTab('home'); }} />}
             {activeTab === 'chat' && <ChatView userProfile={userProfile} onMessageSent={() => gainXP(10, 'totalChats')} />}
             {activeTab === 'ranking' && <RankingView leaderboard={leaderboard} currentUid={userProfile.uid} />}
           </>
@@ -226,6 +262,16 @@ export default function App() {
         <NavBtn active={activeTab === 'chat'} icon={<MessageCircle className="w-6 h-6" />} label="チャット" onClick={() => { setActiveTab('chat'); setSelectedQuestionId(null); setIsFlashcardMode(false); }} />
         <NavBtn active={activeTab === 'ranking'} icon={<Trophy className="w-6 h-6" />} label="順位" onClick={() => { setActiveTab('ranking'); setSelectedQuestionId(null); setIsFlashcardMode(false); }} />
       </nav>
+
+      {/* プロフィール・実績モーダル */}
+      {showProfileModal && (
+        <UserProfileModal 
+          userProfile={userProfile} 
+          setUserProfile={setUserProfile} 
+          badges={BADGES} 
+          onClose={() => setShowProfileModal(false)} 
+        />
+      )}
 
       {/* メンバー一覧モーダル */}
       {showMemberList && (
@@ -275,7 +321,7 @@ export default function App() {
         </div>
       )}
 
-      {/* QRモーダル */}
+      {/* QRコードモーダル */}
       {showQrModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-slate-800 p-6 rounded-3xl max-w-sm w-full border border-slate-700 text-center space-y-4 shadow-2xl">
@@ -292,22 +338,8 @@ export default function App() {
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-slate-800 p-6 rounded-3xl max-w-sm w-full border border-slate-700 text-slate-200 shadow-2xl space-y-4">
             <h3 className="font-black text-lg text-center text-amber-400 border-b border-slate-700 pb-3">遊び方ガイド</h3>
-            <p className="text-xs text-slate-300 leading-relaxed font-bold">1. カード作成で自分の予想問題をカード化！<br/>2. 敵（ボス）の問題を選んで正解するとダメージ！<br/>3. クラスみんなで協力してボスのHPを削りきろう！</p>
+            <p className="text-xs text-slate-300 leading-relaxed font-bold">1. カード作成で予想問題を投稿！<br/>2. フォルダで整理したり、単語帳モードで復習可能。<br/>3. 問題を選んで正解し、協力してテストボスを撃破しよう！</p>
             <button onClick={() => setShowHelpModal(false)} className="w-full bg-amber-500 text-stone-900 py-3 rounded-xl text-xs font-black">閉じる</button>
-          </div>
-        </div>
-      )}
-
-      {/* プロフィール編集モーダル */}
-      {showProfileModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-800 p-6 rounded-3xl max-w-sm w-full border border-slate-700 text-slate-200 shadow-2xl space-y-4">
-            <h3 className="font-extrabold text-lg text-center text-amber-400 border-b border-slate-700 pb-3">プレイヤー情報</h3>
-            <div className="space-y-3">
-              <div><label className="text-[10px] font-bold text-slate-400 block mb-1">名前</label><input type="text" value={userProfile.name} onChange={e => setUserProfile({ ...userProfile, name: e.target.value })} className="w-full bg-slate-900 border border-slate-700 p-2.5 rounded-xl text-xs outline-none text-white font-bold" /></div>
-              <div><label className="text-[10px] font-bold text-slate-400 block mb-1">アイコン (絵文字)</label><input type="text" value={userProfile.avatar} onChange={e => setUserProfile({ ...userProfile, avatar: e.target.value })} className="w-full bg-slate-900 border border-slate-700 p-2.5 rounded-xl text-xs outline-none text-white font-bold" /></div>
-            </div>
-            <button onClick={() => setShowProfileModal(false)} className="w-full bg-amber-500 text-stone-900 py-3 rounded-xl text-xs font-black">保存して閉じる</button>
           </div>
         </div>
       )}
@@ -315,9 +347,10 @@ export default function App() {
   );
 }
 
-// サブコンポーネント: カード作成画面
-function CreateCardView({ userProfile, onSuccess }) {
+// サブ: カード作成画面
+function CreateCardView({ folders, userProfile, onSuccess }) {
   const [subject, setSubject] = useState(SUBJECTS[0]);
+  const [folderId, setFolderId] = useState('');
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
   const [atk, setAtk] = useState(250);
@@ -327,17 +360,27 @@ function CreateCardView({ userProfile, onSuccess }) {
     if (!question.trim()) return;
     try {
       await addDoc(collection(db, 'questions'), {
-        subject, author: userProfile.name, avatar: userProfile.avatar, uid: userProfile.uid, secretCode: userProfile.secretCode,
+        subject, folderId, author: userProfile.name, avatar: userProfile.avatar, uid: userProfile.uid, secretCode: userProfile.secretCode,
         atk: Number(atk), subQuestions: [{ question, answer }], comments: [], createdAt: new Date().toLocaleDateString('ja-JP')
       });
       onSuccess();
-    } catch (err) { alert('生成失敗'); }
+    } catch (err) { alert('作成失敗'); }
   };
 
   return (
     <form onSubmit={handleSubmit} className="bg-slate-800 p-6 rounded-3xl space-y-4 border border-slate-700 max-w-xl mx-auto shadow-2xl">
-      <h2 className="text-lg font-black text-amber-400 flex items-center gap-2"><PlusCircle className="w-5 h-5"/> スキルカード作成</h2>
-      <select value={subject} onChange={e => setSubject(e.target.value)} className="w-full bg-slate-900 border border-slate-700 p-3 rounded-xl text-xs font-bold text-white">{SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}</select>
+      <h2 className="text-lg font-black text-amber-400 flex items-center gap-2"><PlusCircle className="w-5 h-5"/> 新しいスキルカードを作成</h2>
+      
+      <div className="grid grid-cols-2 gap-2">
+        <select value={subject} onChange={e => setSubject(e.target.value)} className="bg-slate-900 border border-slate-700 p-3 rounded-xl text-xs font-bold text-white">
+          {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <select value={folderId} onChange={e => setFolderId(e.target.value)} className="bg-slate-900 border border-slate-700 p-3 rounded-xl text-xs font-bold text-white">
+          <option value="">フォルダ選択（なし）</option>
+          {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+        </select>
+      </div>
+
       <input type="text" required value={question} onChange={e => setQuestion(e.target.value)} placeholder="予想問題を入力..." className="w-full bg-slate-900 border border-slate-700 p-3 rounded-xl text-xs font-bold text-white outline-none" />
       <input type="text" required value={answer} onChange={e => setAnswer(e.target.value)} placeholder="正解・解説を入力..." className="w-full bg-slate-900 border border-slate-700 p-3 rounded-xl text-xs font-bold text-rose-400 outline-none" />
       <div>
@@ -349,7 +392,7 @@ function CreateCardView({ userProfile, onSuccess }) {
   );
 }
 
-// サブコンポーネント: チャット
+// サブ: チャット
 function ChatView({ userProfile, onMessageSent }) {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
@@ -393,7 +436,7 @@ function ChatView({ userProfile, onMessageSent }) {
   );
 }
 
-// サブコンポーネント: ランキング
+// サブ: ランキング
 function RankingView({ leaderboard, currentUid }) {
   return (
     <div className="space-y-4">
