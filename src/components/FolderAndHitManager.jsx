@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import { FolderPlus, X } from 'lucide-react';
+import { FolderPlus, ArrowUpDown, X } from 'lucide-react';
 import { db } from '../firebase';
-import { collection, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
-import { SUBJECT_ELEMENTS } from './BossBattle';
+import { collection, addDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 
 export default function FolderAndHitManager({ 
   folders, 
@@ -15,7 +14,9 @@ export default function FolderAndHitManager({
 }) {
   const [showFolderModal, setShowFolderModal] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
+  const [sortMode, setSortMode] = useState('newest'); // 'newest' | 'hits'
 
+  // 新規フォルダ作成
   const handleCreateFolder = async (e) => {
     e.preventDefault();
     if (!newFolderName.trim()) return;
@@ -32,6 +33,7 @@ export default function FolderAndHitManager({
     }
   };
 
+  // 神的中（🎯出た！）ボタン
   const handleToggleHit = async (e, q) => {
     e.stopPropagation();
     
@@ -54,76 +56,100 @@ export default function FolderAndHitManager({
     }
   };
 
-  const filteredQuestions = selectedFolderId 
+  // フィルタリングと並び替え
+  let filteredQuestions = selectedFolderId 
     ? questions.filter(q => q.folderId === selectedFolderId) 
-    : questions;
+    : [...questions];
+
+  if (sortMode === 'newest') {
+    filteredQuestions.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  } else if (sortMode === 'hits') {
+    filteredQuestions.sort((a, b) => (b.hitCount || 0) - (a.hitCount || 0));
+  }
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
-        <button 
-          onClick={() => onSelectFolder(null)} 
-          className={`px-3.5 py-1.5 rounded-full text-xs font-black whitespace-nowrap transition ${
-            selectedFolderId === null 
-              ? 'bg-amber-500 text-stone-900 shadow-md' 
-              : 'bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700'
-          }`}
-        >
-          すべて ({questions.length})
-        </button>
+      {/* フォルダ選択 ＆ ソートボタン */}
+      <div className="flex items-center justify-between gap-2 overflow-x-auto pb-1">
+        <div className="flex items-center gap-2 overflow-x-auto scrollbar-none">
+          <button 
+            onClick={() => onSelectFolder(null)} 
+            className={`px-3.5 py-1.5 rounded-full text-xs font-black whitespace-nowrap transition ${
+              selectedFolderId === null 
+                ? 'bg-amber-500 text-white shadow-sm' 
+                : 'bg-white text-stone-600 border border-amber-200 hover:bg-amber-50'
+            }`}
+          >
+            すべて ({questions.length})
+          </button>
 
-        {folders.map(f => {
-          const count = questions.filter(q => q.folderId === f.id).length;
-          return (
-            <button 
-              key={f.id} 
-              onClick={() => onSelectFolder(f.id)} 
-              className={`px-3.5 py-1.5 rounded-full text-xs font-black whitespace-nowrap transition ${
-                selectedFolderId === f.id 
-                  ? 'bg-amber-500 text-stone-900 shadow-md' 
-                  : 'bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700'
-              }`}
-            >
-              📁 {f.name} ({count})
-            </button>
-          );
-        })}
+          {folders.map(f => {
+            const count = questions.filter(q => q.folderId === f.id).length;
+            return (
+              <button 
+                key={f.id} 
+                onClick={() => onSelectFolder(f.id)} 
+                className={`px-3.5 py-1.5 rounded-full text-xs font-black whitespace-nowrap transition ${
+                  selectedFolderId === f.id 
+                    ? 'bg-amber-500 text-white shadow-sm' 
+                    : 'bg-white text-stone-600 border border-amber-200 hover:bg-amber-50'
+                }`}
+              >
+                📁 {f.name} ({count})
+              </button>
+            );
+          })}
 
+          <button 
+            onClick={() => setShowFolderModal(true)} 
+            className="bg-white hover:bg-amber-50 text-amber-600 border border-amber-200 px-3 py-1.5 rounded-full text-xs font-black flex items-center gap-1 whitespace-nowrap"
+          >
+            <FolderPlus className="w-3.5 h-3.5" /> フォルダ作成
+          </button>
+        </div>
+
+        {/* 新着順/的中順 切り替え */}
         <button 
-          onClick={() => setShowFolderModal(true)} 
-          className="bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 px-3 py-1.5 rounded-full text-xs font-black flex items-center gap-1 whitespace-nowrap"
+          onClick={() => setSortMode(sortMode === 'newest' ? 'hits' : 'newest')}
+          className="bg-amber-100 hover:bg-amber-200 text-amber-800 px-3 py-1.5 rounded-xl text-[11px] font-black flex items-center gap-1 whitespace-nowrap shadow-sm"
         >
-          <FolderPlus className="w-3.5 h-3.5" /> フォルダ追加
+          <ArrowUpDown className="w-3 h-3"/> {sortMode === 'newest' ? '新着順' : '的中順'}
         </button>
       </div>
 
+      {/* 問題カード一覧 */}
       <div className="space-y-2.5">
         {filteredQuestions.length === 0 ? (
-          <div className="text-center py-8 text-slate-500 font-bold text-xs bg-slate-800 rounded-3xl border border-slate-700">
-            問題がありません。「カード作成」から新しい問題を投稿しよう！
+          <div className="text-center py-8 text-stone-400 font-bold text-xs bg-white rounded-3xl border border-amber-200">
+            問題がありません。「問題作成」から新しい問題を投稿しよう！
           </div>
         ) : (
           filteredQuestions.map(q => {
-            const elemInfo = SUBJECT_ELEMENTS[q.subject] || { name: '✨ 光属性', color: 'bg-amber-400 text-stone-900' };
             const isHitByMe = (q.hitBy || []).includes(userProfile.uid);
             const hitCount = q.hitCount || 0;
+            const subCount = (q.subQuestions || []).length;
 
             return (
               <div 
                 key={q.id} 
                 onClick={() => onSelectQuestion(q.id)}
-                className="bg-slate-800 hover:bg-slate-750 p-4 rounded-2xl border border-slate-700 cursor-pointer space-y-2 transition flex justify-between items-center group shadow-md"
+                className="bg-white hover:bg-amber-50/50 p-4 rounded-2xl border border-amber-200/80 cursor-pointer transition flex justify-between items-center shadow-sm"
               >
                 <div className="space-y-1.5 flex-1 pr-3">
                   <div className="flex items-center gap-2">
-                    <span className={`text-[9px] font-black px-2.5 py-0.5 rounded-full ${elemInfo.color}`}>
-                      {elemInfo.name} | {q.subject}
+                    <span className="bg-amber-100 text-amber-800 text-[10px] font-black px-2.5 py-0.5 rounded-full">
+                      {q.subject}
                     </span>
-                    <span className="text-[10px] font-extrabold text-slate-400">
+                    {subCount > 1 && (
+                      <span className="bg-orange-100 text-orange-700 text-[9px] font-extrabold px-2 py-0.5 rounded-md">
+                        {subCount}問構成
+                      </span>
+                    )}
+                    <span className="text-[10px] font-extrabold text-stone-400">
                       by {q.author || '匿名'}
                     </span>
                   </div>
-                  <h4 className="font-extrabold text-xs text-slate-100 truncate">
+                  <h4 className="font-extrabold text-xs text-stone-800 truncate">
                     Q. {q.subQuestions?.[0]?.question || '無題'}
                   </h4>
                 </div>
@@ -132,8 +158,8 @@ export default function FolderAndHitManager({
                   onClick={(e) => handleToggleHit(e, q)} 
                   className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition transform active:scale-95 ${
                     isHitByMe 
-                      ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20' 
-                      : 'bg-slate-700/80 hover:bg-slate-700 text-slate-300 border border-slate-600'
+                      ? 'bg-rose-500 text-white shadow-md' 
+                      : 'bg-amber-50 hover:bg-amber-100 text-stone-700 border border-amber-200'
                   }`}
                   title="テストに出たら押そう！"
                 >
@@ -146,24 +172,25 @@ export default function FolderAndHitManager({
         )}
       </div>
 
+      {/* フォルダ作成モーダル */}
       {showFolderModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <form onSubmit={handleCreateFolder} className="bg-slate-800 p-6 rounded-3xl max-w-sm w-full space-y-4 border border-slate-700 shadow-2xl">
-            <div className="flex justify-between items-center border-b border-slate-700 pb-2">
-              <h3 className="font-extrabold text-base text-amber-400">新規フォルダ作成</h3>
-              <button type="button" onClick={() => setShowFolderModal(false)} className="text-slate-400 hover:text-white"><X className="w-4 h-4"/></button>
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <form onSubmit={handleCreateFolder} className="bg-white p-6 rounded-3xl max-w-sm w-full space-y-4 border border-amber-200 shadow-2xl">
+            <div className="flex justify-between items-center border-b border-amber-100 pb-2">
+              <h3 className="font-extrabold text-base text-amber-600">新規フォルダ作成</h3>
+              <button type="button" onClick={() => setShowFolderModal(false)} className="text-stone-400 hover:text-stone-700"><X className="w-4 h-4"/></button>
             </div>
             <input 
               type="text" 
               required 
               value={newFolderName} 
               onChange={e => setNewFolderName(e.target.value)} 
-              placeholder="例: 中間テスト対策, 数学A" 
-              className="w-full bg-slate-900 border border-slate-700 p-3 rounded-xl text-xs font-bold text-white outline-none focus:border-amber-500 transition" 
+              placeholder="例: 期末テスト対策, 数学B" 
+              className="w-full bg-amber-50/50 border border-amber-200 p-3 rounded-xl text-xs font-bold text-stone-800 outline-none focus:border-amber-500" 
             />
             <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setShowFolderModal(false)} className="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">キャンセル</button>
-              <button type="submit" className="bg-amber-500 hover:bg-amber-600 text-stone-900 px-5 py-2 rounded-xl text-xs font-black shadow-md">作成</button>
+              <button type="button" onClick={() => setShowFolderModal(false)} className="px-4 py-2 text-xs font-bold text-stone-500">キャンセル</button>
+              <button type="submit" className="bg-amber-500 hover:bg-amber-600 text-white px-5 py-2 rounded-xl text-xs font-black shadow-md">作成</button>
             </div>
           </form>
         </div>
