@@ -49,6 +49,11 @@ export default function App() {
   const [showMenuDrawer, setShowMenuDrawer] = useState(false);
   const [tempCode, setTempCode] = useState('');
 
+  // 歴史投稿用フォーム状態 (管理者)
+  const [histVersion, setHistVersion] = useState('');
+  const [histTitle, setHistTitle] = useState('');
+  const [histDesc, setHistDesc] = useState('');
+
   const [folders, setFolders] = useState([]);
   const [questions, setQuestions] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
@@ -126,7 +131,27 @@ export default function App() {
     }
   };
 
-  // テストカウントダウン計算
+  // アプリの歴史投稿 (管理者)
+  const handleAddHistory = async (e) => {
+    e.preventDefault();
+    if (!histTitle.trim()) return;
+    try {
+      await addDoc(collection(db, 'app_history'), {
+        version: histVersion || 'v1.0',
+        title: histTitle,
+        desc: histDesc,
+        date: new Date().toLocaleDateString('ja-JP'),
+        order: Date.now()
+      });
+      setHistVersion('');
+      setHistTitle('');
+      setHistDesc('');
+      alert('歴史を追加しました！');
+    } catch (err) {
+      alert('投稿に失敗しました');
+    }
+  };
+
   const getDaysUntilTest = () => {
     if (!userProfile.testDate) return null;
     const today = new Date();
@@ -207,9 +232,8 @@ export default function App() {
 
       {/* メインビュー */}
       <main className="max-w-4xl mx-auto p-4 flex-1 w-full space-y-4">
-        {/* カウントダウン表示バー */}
         {daysLeft !== null && !selectedQuestionId && !isFlashcardMode && (
-          <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white p-3 rounded-2xl shadow-md flex justify-between items-center px-4">
+          <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white p-3.5 rounded-2xl shadow-md flex justify-between items-center px-4">
             <div className="flex items-center gap-2 font-black text-xs">
               <Calendar className="w-4 h-4"/> 次のテスト本番
             </div>
@@ -328,13 +352,26 @@ export default function App() {
         </div>
       )}
 
+      {/* アプリの歴史モーダル（管理者投稿フォーム追加） */}
       {showHistoryModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white p-6 rounded-3xl max-w-sm w-full border border-amber-200 text-stone-800 space-y-4 max-h-[80vh] flex flex-col shadow-2xl">
+          <div className="bg-white p-6 rounded-3xl max-w-sm w-full border border-amber-200 text-stone-800 space-y-4 max-h-[85vh] flex flex-col shadow-2xl">
             <div className="flex justify-between items-center border-b border-amber-100 pb-3">
               <h3 className="font-black text-base text-purple-600">アプリの歴史</h3>
               {!isAdmin && <button onClick={() => { const pwd = window.prompt('管理者パスワード:'); if (pwd === ADMIN_PASSWORD) setIsAdmin(true); }} className="text-[10px] text-stone-400 underline font-bold">🔑 管理者</button>}
             </div>
+
+            {/* 管理者用投稿フォーム */}
+            {isAdmin && (
+              <form onSubmit={handleAddHistory} className="bg-purple-50 p-3 rounded-2xl border border-purple-200 space-y-2 text-xs">
+                <div className="font-extrabold text-purple-800">＋ 新しい歴史を追加 (管理者)</div>
+                <input type="text" placeholder="バージョン (例: v2.1)" value={histVersion} onChange={e => setHistVersion(e.target.value)} className="w-full p-2 bg-white rounded-lg border border-purple-200 text-xs outline-none" />
+                <input type="text" required placeholder="タイトル" value={histTitle} onChange={e => setHistTitle(e.target.value)} className="w-full p-2 bg-white rounded-lg border border-purple-200 text-xs outline-none font-bold" />
+                <textarea placeholder="アップデート内容の詳細" value={histDesc} onChange={e => setHistDesc(e.target.value)} className="w-full p-2 bg-white rounded-lg border border-purple-200 text-xs outline-none" h-16 />
+                <button type="submit" className="w-full bg-purple-600 text-white py-1.5 rounded-lg font-black text-xs shadow-sm">歴史に刻む</button>
+              </form>
+            )}
+
             <div className="overflow-y-auto space-y-3 flex-1 pr-1">
               {historyList.map(item => (
                 <div key={item.id} className="border-l-2 border-purple-400 pl-3 py-1 space-y-0.5">
