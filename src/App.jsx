@@ -37,7 +37,8 @@ export default function App() {
     const defaultUid = 'user_' + Date.now() + Math.floor(Math.random()*1000);
     return saved ? JSON.parse(saved) : { 
       uid: defaultUid, name: 'チャレンジャー', avatar: '🎓', testDate: '',
-      xp: 0, level: 1, totalPosts: 0, totalChats: 0, hitCount: 0, secretCode: ''
+      xp: 0, level: 1, totalPosts: 0, totalChats: 0, hitCount: 0, secretCode: '',
+      weaponId: null, armorId: null, atkBonus: 0, defBonus: 0
     };
   });
 
@@ -86,7 +87,6 @@ export default function App() {
       const groupUsers = data.filter(d => d.secretCode === userProfile.secretCode);
       
       const me = groupUsers.find(u => u.uid === userProfile.uid);
-      // 管理者(isAdmin)でない一般ユーザーのみBAN判定を有効化
       if (me && me.isKicked && !isAdmin) {
         alert('管理者によってこのグループから退去処理されました。');
         setUserProfile(prev => ({ ...prev, secretCode: '' }));
@@ -305,7 +305,9 @@ export default function App() {
                       currentUid={userProfile.uid} 
                       questions={questions} 
                       userProfile={userProfile} 
+                      folders={folders}
                       gainXP={gainXP} 
+                      setUserProfile={setUserProfile}
                     />
                   </div>
                 ) : (
@@ -595,19 +597,36 @@ function ChatView({ userProfile, onMessageSent }) {
   );
 }
 
+// 戦闘力（Power）ランキング画面
 function RankingView({ leaderboard, currentUid }) {
+  const sortedByPower = [...leaderboard].map(u => {
+    const lvl = u.level || 1;
+    const power = (lvl * 100) + (u.atkBonus || 0) + (u.defBonus || 0);
+    return { ...u, power };
+  }).sort((a, b) => b.power - a.power);
+
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-black text-stone-800 flex items-center gap-2"><Trophy className="w-5 h-5 text-amber-500"/> みんなのランキング</h2>
+      <h2 className="text-lg font-black text-stone-800 flex items-center gap-2">
+        <Trophy className="w-5 h-5 text-amber-500"/> 戦闘力ランキング
+      </h2>
       <div className="space-y-2">
-        {leaderboard.map((u, i) => (
+        {sortedByPower.map((u, i) => (
           <div key={u.uid} className="bg-white p-3.5 rounded-2xl flex items-center justify-between border border-amber-200/80 shadow-sm">
             <div className="flex items-center gap-3">
               <span className="font-black text-sm text-stone-400">{i+1}</span>
               <span className="text-2xl">{u.avatar || '🎓'}</span>
-              <div><div className="text-xs font-extrabold text-stone-800">{u.name} {u.uid === currentUid && <span className="text-[9px] bg-amber-500 text-white px-1.5 py-0.5 rounded-md font-black">あなた</span>}</div><div className="text-[10px] font-bold text-amber-600">Lv.{u.level || 1}</div></div>
+              <div>
+                <div className="text-xs font-extrabold text-stone-800">
+                  {u.name} {u.uid === currentUid && <span className="text-[9px] bg-amber-500 text-white px-1.5 py-0.5 rounded-md font-black">あなた</span>}
+                </div>
+                <div className="text-[10px] font-bold text-amber-600">Lv.{u.level || 1}</div>
+              </div>
             </div>
-            <span className="text-xs font-black text-stone-700">{u.xp || 0} XP</span>
+            <div className="text-right">
+              <div className="text-xs font-black text-orange-600">⚔️ {u.power} Power</div>
+              <div className="text-[9px] text-stone-400 font-bold">{u.xp || 0} XP</div>
+            </div>
           </div>
         ))}
       </div>
