@@ -1,20 +1,36 @@
 import React, { useState, useEffect } from 'react';
-import { Swords, Zap, Check, X, Clock } from 'lucide-react';
+import { Swords, Check, X, Clock } from 'lucide-react';
 import { db } from '../firebase';
 import { doc, updateDoc, onSnapshot, setDoc } from 'firebase/firestore';
 
+// ★ これが抜けていたためビルドエラーになっていました
+export const SUBJECT_ELEMENTS = {
+  '国語1': { name: '国語1', color: 'bg-amber-100 text-amber-800' },
+  '国語２a': { name: '国語２a', color: 'bg-amber-100 text-amber-800' },
+  '国語２ｂ': { name: '国語２ｂ', color: 'bg-amber-100 text-amber-800' },
+  '歴史': { name: '歴史', color: 'bg-amber-100 text-amber-800' },
+  '数学Ａ': { name: '数学Ａ', color: 'bg-amber-100 text-amber-800' },
+  '数学Ｂ': { name: '数学Ｂ', color: 'bg-amber-100 text-amber-800' },
+  '化学': { name: '化学', color: 'bg-amber-100 text-amber-800' },
+  '生物': { name: '生物', color: 'bg-amber-100 text-amber-800' },
+  '地学': { name: '地学', color: 'bg-amber-100 text-amber-800' },
+  '地理': { name: '地理', color: 'bg-amber-100 text-amber-800' },
+  '英語１': { name: '英語１', color: 'bg-amber-100 text-amber-800' },
+  '英語２': { name: '英語２', color: 'bg-amber-100 text-amber-800' },
+  '音楽': { name: '音楽', color: 'bg-amber-100 text-amber-800' }
+};
+
+export const SUBJECTS = Object.keys(SUBJECT_ELEMENTS);
+
 export default function PvPBattle({ leaderboard, currentUid, questions, userProfile, gainXP }) {
-  const [battleState, setBattleState] = useState(null); // Firestoreの対戦状態
-  const [battleId, setBattleId] = useState(null);
+  const [battleState, setBattleState] = useState(null);
   const [waitingTarget, setWaitingTarget] = useState(null);
 
-  // リアルタイム対戦データの監視
   useEffect(() => {
     if (!userProfile.uid) return;
     const unsub = onSnapshot(doc(db, 'pvp_battles', userProfile.uid), (snapshot) => {
       if (snapshot.exists()) {
-        const data = snapshot.data();
-        setBattleState(data);
+        setBattleState(snapshot.data());
       } else {
         setBattleState(null);
       }
@@ -22,12 +38,10 @@ export default function PvPBattle({ leaderboard, currentUid, questions, userProf
     return () => unsub();
   }, [userProfile.uid]);
 
-  // 対戦を申し込む
   const handleInvite = async (targetUser) => {
     const newBattleId = `battle_${Date.now()}`;
     setWaitingTarget(targetUser);
 
-    // 自分の対戦状態
     await setDoc(doc(db, 'pvp_battles', userProfile.uid), {
       battleId: newBattleId,
       status: 'waiting',
@@ -38,7 +52,6 @@ export default function PvPBattle({ leaderboard, currentUid, questions, userProf
       opponentHp: 1000,
     });
 
-    // 相手への対戦リクエスト通知
     await setDoc(doc(db, 'pvp_battles', targetUser.uid), {
       battleId: newBattleId,
       status: 'invited',
@@ -48,19 +61,14 @@ export default function PvPBattle({ leaderboard, currentUid, questions, userProf
       myHp: 1000,
       opponentHp: 1000,
     });
-
-    setBattleId(newBattleId);
   };
 
-  // 対戦リクエストを受ける
   const handleAccept = async () => {
     if (!battleState) return;
-    
     await updateDoc(doc(db, 'pvp_battles', userProfile.uid), { status: 'playing' });
     await updateDoc(doc(db, 'pvp_battles', battleState.opponentUid), { status: 'playing' });
   };
 
-  // 対戦リクエストを拒否・キャンセル
   const handleCancel = async () => {
     if (battleState?.opponentUid) {
       await setDoc(doc(db, 'pvp_battles', battleState.opponentUid), {});
@@ -76,37 +84,34 @@ export default function PvPBattle({ leaderboard, currentUid, questions, userProf
         <h3 className="font-black text-base text-stone-800">1対1 リアルタイム対戦</h3>
       </div>
 
-      {/* リクエスト受信画面 */}
       {battleState?.status === 'invited' && (
-        <div className="bg-amber-50 border-2 border-amber-300 p-4 rounded-2xl text-center space-y-3 animate-bounce">
+        <div className="bg-amber-50 border-2 border-amber-300 p-4 rounded-2xl text-center space-y-3">
           <div className="font-black text-sm text-stone-800">
             ⚔️ <span className="text-amber-600">{battleState.opponentName}</span> から対戦申し込みが届きました！
           </div>
           <div className="flex justify-center gap-3">
-            <button onClick={handleAccept} className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2 rounded-xl text-xs font-black shadow-md flex items-center gap-1">
+            <button onClick={handleAccept} className="bg-emerald-500 text-white px-5 py-2 rounded-xl text-xs font-black shadow-md flex items-center gap-1">
               <Check className="w-4 h-4"/> 受ける
             </button>
-            <button onClick={handleCancel} className="bg-rose-500 hover:bg-rose-600 text-white px-5 py-2 rounded-xl text-xs font-black shadow-md flex items-center gap-1">
+            <button onClick={handleCancel} className="bg-rose-500 text-white px-5 py-2 rounded-xl text-xs font-black shadow-md flex items-center gap-1">
               <X className="w-4 h-4"/> 断る
             </button>
           </div>
         </div>
       )}
 
-      {/* 相手の応答待ち画面 */}
       {battleState?.status === 'waiting' && (
         <div className="bg-amber-50/80 border border-amber-200 p-6 rounded-2xl text-center space-y-3">
           <Clock className="w-8 h-8 text-amber-500 mx-auto animate-spin" />
           <div className="font-black text-sm text-stone-800">
             <span className="text-amber-600">{waitingTarget?.name}</span> の応答を待っています…
           </div>
-          <button onClick={handleCancel} className="bg-stone-200 hover:bg-stone-300 text-stone-700 px-4 py-2 rounded-xl text-xs font-bold">
+          <button onClick={handleCancel} className="bg-stone-200 text-stone-700 px-4 py-2 rounded-xl text-xs font-bold">
             キャンセル
           </button>
         </div>
       )}
 
-      {/* 通常の対戦相手一覧 */}
       {(!battleState || !battleState.status) && (
         <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
           {leaderboard.filter(u => u.uid !== currentUid).length === 0 ? (
@@ -123,7 +128,7 @@ export default function PvPBattle({ leaderboard, currentUid, questions, userProf
                 </div>
                 <button 
                   onClick={() => handleInvite(u)} 
-                  className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white px-4 py-2 rounded-xl text-xs font-black shadow-md transition transform active:scale-95"
+                  className="bg-gradient-to-r from-amber-500 to-orange-500 text-white px-4 py-2 rounded-xl text-xs font-black shadow-md transition transform active:scale-95"
                 >
                   対戦を申し込む ⚔️
                 </button>
@@ -133,7 +138,6 @@ export default function PvPBattle({ leaderboard, currentUid, questions, userProf
         </div>
       )}
 
-      {/* プレイ中（対戦画面） */}
       {battleState?.status === 'playing' && (
         <div className="space-y-4 py-2">
           <div className="bg-amber-100/60 p-4 rounded-2xl text-center space-y-2">
