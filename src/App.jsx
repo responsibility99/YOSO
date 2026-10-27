@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Home, PlusCircle, MessageCircle, Trophy, LogOut,
-  QrCode, HelpCircle, History, Users, Menu, X, Send, BookOpen, Calendar, Plus, Trash2, Edit, ShieldAlert, Check
+  QrCode, HelpCircle, History, Users, Menu, X, Send, BookOpen, Calendar, Plus, Trash2, Edit, ShieldAlert
 } from 'lucide-react';
 import { db } from './firebase';
 import { 
@@ -36,7 +36,7 @@ export default function App() {
     const saved = localStorage.getItem('study_app_user_v6');
     const defaultUid = 'user_' + Date.now() + Math.floor(Math.random()*1000);
     return saved ? JSON.parse(saved) : { 
-      uid: defaultUid, name: '開成チャレンジャー', avatar: '🎓', testDate: '',
+      uid: defaultUid, name: 'チャレンジャー', avatar: '🎓', testDate: '',
       xp: 0, level: 1, totalPosts: 0, totalChats: 0, hitCount: 0, secretCode: ''
     };
   });
@@ -49,7 +49,6 @@ export default function App() {
   const [showMenuDrawer, setShowMenuDrawer] = useState(false);
   const [tempCode, setTempCode] = useState('');
 
-  // 歴史編集・投稿用状態 (管理者)
   const [histVersion, setHistVersion] = useState('');
   const [histTitle, setHistTitle] = useState('');
   const [histDesc, setHistDesc] = useState('');
@@ -122,7 +121,6 @@ export default function App() {
     });
   };
 
-  // 荒らしユーザー追放処理 (管理者)
   const handleKickUser = async (targetUid, targetName) => {
     if (!isAdmin) return;
     if (window.confirm(`「${targetName}」をグループから追放（BAN）しますか？`)) {
@@ -135,7 +133,6 @@ export default function App() {
     }
   };
 
-  // アプリの歴史の新規追加 ＆ 編集保存 (管理者)
   const handleSaveHistory = async (e) => {
     e.preventDefault();
     if (!histTitle.trim()) return;
@@ -167,7 +164,6 @@ export default function App() {
     }
   };
 
-  // アプリの歴史の削除 (管理者)
   const handleDeleteHistory = async (id) => {
     if (!isAdmin) return;
     if (window.confirm('この歴史の項目を削除しますか？')) {
@@ -206,7 +202,7 @@ export default function App() {
               required 
               value={tempCode} 
               onChange={e => setTempCode(e.target.value)} 
-              placeholder="例: kaisei2026" 
+              placeholder="例: room2026" 
               className="w-full bg-amber-50/50 border-2 border-amber-200 focus:border-amber-500 p-4 rounded-2xl text-center text-lg font-black outline-none text-stone-800 transition mb-4 shadow-inner" 
             />
             <button type="submit" className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white py-4 rounded-2xl font-black shadow-lg shadow-amber-500/30 transition">
@@ -236,7 +232,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* スライドメニュー */}
+      {/* ドロワー */}
       {showMenuDrawer && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex justify-end">
           <div className="bg-white w-64 h-full p-6 space-y-6 flex flex-col justify-between border-l border-amber-200 shadow-2xl">
@@ -259,7 +255,6 @@ export default function App() {
 
       {/* メインビュー */}
       <main className="max-w-4xl mx-auto p-4 flex-1 w-full space-y-4">
-        {/* 大型化＆グラフィカルなカウントダウン表示 */}
         {daysLeft !== null && !selectedQuestionId && !isFlashcardMode && (
           <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white p-5 rounded-3xl shadow-xl border border-amber-300 relative overflow-hidden flex justify-between items-center px-6">
             <div className="space-y-1">
@@ -346,7 +341,7 @@ export default function App() {
         )}
       </main>
 
-      {/* ボトムナビ */}
+      {/* フッターナビ */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-amber-200 p-2 z-30 flex justify-around shadow-lg rounded-t-3xl">
         <NavBtn active={activeTab === 'home'} icon={<Home className="w-6 h-6" />} label="ホーム" onClick={() => { setActiveTab('home'); setSelectedQuestionId(null); setIsFlashcardMode(false); setShowPvP(false); }} />
         <NavBtn active={activeTab === 'create'} icon={<PlusCircle className="w-6 h-6" />} label="問題作成" onClick={() => { setActiveTab('create'); setSelectedQuestionId(null); setIsFlashcardMode(false); setShowPvP(false); }} />
@@ -354,7 +349,7 @@ export default function App() {
         <NavBtn active={activeTab === 'ranking'} icon={<Trophy className="w-6 h-6" />} label="順位" onClick={() => { setActiveTab('ranking'); setSelectedQuestionId(null); setIsFlashcardMode(false); setShowPvP(false); }} />
       </nav>
 
-      {/* モーダル群 */}
+      {/* モーダル */}
       {showProfileModal && (
         <UserProfileModal 
           userProfile={userProfile} 
@@ -364,7 +359,6 @@ export default function App() {
         />
       )}
 
-      {/* メンバー一覧（管理者追放BAN機能付き） */}
       {showMemberList && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white p-6 rounded-3xl max-w-sm w-full border border-amber-200 shadow-2xl flex flex-col max-h-[80vh]">
@@ -397,7 +391,6 @@ export default function App() {
         </div>
       )}
 
-      {/* アプリの歴史（編集＆削除機能付き） */}
       {showHistoryModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white p-6 rounded-3xl max-w-sm w-full border border-amber-200 text-stone-800 space-y-4 max-h-[85vh] flex flex-col shadow-2xl">
@@ -406,7 +399,6 @@ export default function App() {
               {!isAdmin && <button onClick={() => { const pwd = window.prompt('管理者パスワード:'); if (pwd === ADMIN_PASSWORD) setIsAdmin(true); }} className="text-[10px] text-stone-400 underline font-bold">🔑 管理者</button>}
             </div>
 
-            {/* 管理者用 投稿・編集フォーム */}
             {isAdmin && (
               <form onSubmit={handleSaveHistory} className="bg-purple-50 p-3 rounded-2xl border border-purple-200 space-y-2 text-xs">
                 <div className="font-extrabold text-purple-800 flex justify-between items-center">
@@ -468,7 +460,7 @@ export default function App() {
   );
 }
 
-// サブ: 複数問題対応の作成画面
+// 作成画面
 function CreateCardView({ folders, userProfile, onSuccess }) {
   const [subject, setSubject] = useState(SUBJECTS[0]);
   const [folderId, setFolderId] = useState('');
@@ -560,7 +552,7 @@ function CreateCardView({ folders, userProfile, onSuccess }) {
   );
 }
 
-// サブ: チャット
+// チャット
 function ChatView({ userProfile, onMessageSent }) {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
@@ -604,11 +596,11 @@ function ChatView({ userProfile, onMessageSent }) {
   );
 }
 
-// サブ: ランキング
+// ランキング（「みんなのランキング」に変更）
 function RankingView({ leaderboard, currentUid }) {
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-black text-stone-800 flex items-center gap-2"><Trophy className="w-5 h-5 text-amber-500"/> 開成予想屋 ランキング</h2>
+      <h2 className="text-lg font-black text-stone-800 flex items-center gap-2"><Trophy className="w-5 h-5 text-amber-500"/> みんなのランキング</h2>
       <div className="space-y-2">
         {leaderboard.map((u, i) => (
           <div key={u.uid} className="bg-white p-3.5 rounded-2xl flex items-center justify-between border border-amber-200/80 shadow-sm">
