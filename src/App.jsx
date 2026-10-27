@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Home, PlusCircle, MessageCircle, Trophy, LogOut,
-  QrCode, HelpCircle, History, Users, Menu, X, Send, BookOpen, Plus, Trash2
+  QrCode, HelpCircle, History, Users, Menu, X, Send, BookOpen, Calendar, Plus, Trash2
 } from 'lucide-react';
 import { db } from './firebase';
 import { 
@@ -126,6 +126,17 @@ export default function App() {
     }
   };
 
+  // テストカウントダウン計算
+  const getDaysUntilTest = () => {
+    if (!userProfile.testDate) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const diffTime = new Date(userProfile.testDate) - today;
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  };
+
+  const daysLeft = getDaysUntilTest();
+
   if (!userProfile.secretCode) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-amber-100 via-orange-100 to-amber-200 flex items-center justify-center p-4">
@@ -173,7 +184,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* ドロワーメニュー */}
+      {/* スライドメニュー */}
       {showMenuDrawer && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex justify-end">
           <div className="bg-white w-64 h-full p-6 space-y-6 flex flex-col justify-between border-l border-amber-200 shadow-2xl">
@@ -195,7 +206,19 @@ export default function App() {
       )}
 
       {/* メインビュー */}
-      <main className="max-w-4xl mx-auto p-4 flex-1 w-full space-y-6">
+      <main className="max-w-4xl mx-auto p-4 flex-1 w-full space-y-4">
+        {/* カウントダウン表示バー */}
+        {daysLeft !== null && !selectedQuestionId && !isFlashcardMode && (
+          <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white p-3 rounded-2xl shadow-md flex justify-between items-center px-4">
+            <div className="flex items-center gap-2 font-black text-xs">
+              <Calendar className="w-4 h-4"/> 次のテスト本番
+            </div>
+            <div className="font-black text-sm">
+              {daysLeft > 0 ? `あと ${daysLeft} 日！` : daysLeft === 0 ? '今日がテスト本番！' : 'テスト終了'}
+            </div>
+          </div>
+        )}
+
         {selectedQuestionId ? (
           <QuestionDetailView 
             question={questions.find(q => q.id === selectedQuestionId)} 
@@ -262,7 +285,7 @@ export default function App() {
         )}
       </main>
 
-      {/* フッターナビ */}
+      {/* ボトムナビ */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-amber-200 p-2 z-30 flex justify-around shadow-lg rounded-t-3xl">
         <NavBtn active={activeTab === 'home'} icon={<Home className="w-6 h-6" />} label="ホーム" onClick={() => { setActiveTab('home'); setSelectedQuestionId(null); setIsFlashcardMode(false); setShowPvP(false); }} />
         <NavBtn active={activeTab === 'create'} icon={<PlusCircle className="w-6 h-6" />} label="問題作成" onClick={() => { setActiveTab('create'); setSelectedQuestionId(null); setIsFlashcardMode(false); setShowPvP(false); }} />
@@ -398,7 +421,6 @@ function CreateCardView({ folders, userProfile, onSuccess }) {
         </select>
       </div>
 
-      {/* 複数小問フォーム */}
       <div className="space-y-3 pt-2">
         {subQuestions.map((sub, idx) => (
           <div key={idx} className="p-3 bg-amber-50/40 border border-amber-200 rounded-2xl space-y-2 relative">
