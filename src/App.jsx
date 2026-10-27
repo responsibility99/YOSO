@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Home, PlusCircle, MessageCircle, Trophy, LogOut,
-  QrCode, HelpCircle, History, Swords, Users, Menu, X, Send
+  QrCode, HelpCircle, History, Users, Menu, X, Send, BookOpen
 } from 'lucide-react';
 import { db } from './firebase';
 import { 
@@ -31,12 +31,13 @@ export default function App() {
   const [selectedFolderId, setSelectedFolderId] = useState(null);
   const [selectedQuestionId, setSelectedQuestionId] = useState(null);
   const [isFlashcardMode, setIsFlashcardMode] = useState(false);
+  const [showPvP, setShowPvP] = useState(false);
 
   const [userProfile, setUserProfile] = useState(() => {
     const saved = localStorage.getItem('study_app_user_v6');
     const defaultUid = 'user_' + Date.now() + Math.floor(Math.random()*1000);
     return saved ? JSON.parse(saved) : { 
-      uid: defaultUid, name: '開成チャレンジャー', avatar: '⚔️', testDate: '',
+      uid: defaultUid, name: '開成チャレンジャー', avatar: '🎓', testDate: '',
       xp: 0, level: 1, totalPosts: 0, totalChats: 0, hitCount: 0, secretCode: ''
     };
   });
@@ -136,11 +137,11 @@ export default function App() {
       <div className="min-h-screen bg-gradient-to-br from-amber-100 via-orange-100 to-amber-200 flex items-center justify-center p-4">
         <div className="bg-white/90 backdrop-blur-md p-8 rounded-3xl border border-amber-200 shadow-xl max-w-sm w-full text-center space-y-6">
           <div className="bg-gradient-to-tr from-amber-400 to-orange-500 w-20 h-20 mx-auto rounded-3xl flex items-center justify-center shadow-lg shadow-orange-500/20">
-            <Swords className="w-10 h-10 text-white animate-bounce" />
+            <BookOpen className="w-10 h-10 text-white" />
           </div>
-          <h1 className="text-2xl font-black text-amber-600">YOSO BATTLE</h1>
+          <h1 className="text-2xl font-black text-amber-600">YOSO</h1>
           <p className="text-xs font-bold text-stone-600 leading-relaxed">
-            同じ合言葉を入力して<br/>クラスメイトとバトルを開始しよう！
+            同じ合言葉を入力して<br/>仲間と問題を共有しよう！
           </p>
           <form onSubmit={(e) => { e.preventDefault(); if(tempCode.trim()) setUserProfile({...userProfile, secretCode: tempCode.trim()}); }}>
             <input 
@@ -152,7 +153,7 @@ export default function App() {
               className="w-full bg-amber-50/50 border-2 border-amber-200 focus:border-amber-500 p-4 rounded-2xl text-center text-lg font-black outline-none text-stone-800 transition mb-4 shadow-inner" 
             />
             <button type="submit" className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white py-4 rounded-2xl font-black shadow-lg shadow-amber-500/30 transition">
-              バトルルームに入る
+              ルームに入る
             </button>
           </form>
         </div>
@@ -162,11 +163,11 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-amber-50/60 via-orange-50/30 to-amber-100/40 text-stone-800 flex flex-col font-sans pb-24">
-      {/* ポップな明るいヘッダー */}
+      {/* ヘッダー */}
       <header className="bg-white/80 backdrop-blur-md sticky top-0 z-30 border-b border-amber-200/60 px-4 py-3 flex justify-between items-center shadow-sm">
-        <div className="flex items-center gap-2 cursor-pointer" onClick={() => { setActiveTab('home'); setSelectedQuestionId(null); setIsFlashcardMode(false); }}>
-          <div className="bg-gradient-to-tr from-amber-400 to-orange-500 p-2 rounded-2xl shadow-sm"><Swords className="w-5 h-5 text-white" /></div>
-          <h1 className="font-black text-xl tracking-wider bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">YOSO BATTLE</h1>
+        <div className="flex items-center gap-2 cursor-pointer" onClick={() => { setActiveTab('home'); setSelectedQuestionId(null); setIsFlashcardMode(false); setShowPvP(false); }}>
+          <div className="bg-gradient-to-tr from-amber-400 to-orange-500 p-2 rounded-2xl shadow-sm"><BookOpen className="w-5 h-5 text-white" /></div>
+          <h1 className="font-black text-xl tracking-wider bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">YOSO</h1>
         </div>
 
         <div className="flex items-center gap-2">
@@ -206,7 +207,6 @@ export default function App() {
             question={questions.find(q => q.id === selectedQuestionId)} 
             currentUid={userProfile.uid}
             onBack={() => setSelectedQuestionId(null)}
-            onAttackBoss={() => {}}
             onAddComment={async (qId, text) => {
               const q = questions.find(item => item.id === qId);
               await updateDoc(doc(db, 'questions', qId), {
@@ -221,30 +221,45 @@ export default function App() {
           <>
             {activeTab === 'home' && (
               <div className="space-y-6">
-                <PvPBattle 
-                  leaderboard={leaderboard} 
-                  currentUid={userProfile.uid} 
-                  questions={questions} 
-                  userProfile={userProfile} 
-                  gainXP={gainXP} 
-                />
-                
-                <div className="pt-2 border-t border-amber-200/60 space-y-3">
-                  <div className="flex justify-between items-center">
-                    <h3 className="text-sm font-black text-stone-800">📁 デッキフォルダ & 予想カード一覧</h3>
-                    <button onClick={() => setIsFlashcardMode(true)} className="bg-white border border-amber-300 text-amber-600 px-3 py-1.5 rounded-xl text-xs font-black hover:bg-amber-50 shadow-sm">🎴 単語帳モード</button>
+                {/* サブ機能：対人バトル切り替え */}
+                {showPvP ? (
+                  <div className="space-y-3">
+                    <button onClick={() => setShowPvP(false)} className="text-xs font-bold text-amber-600 bg-white border border-amber-200 px-3 py-1 rounded-full shadow-sm">
+                      ← 通常モードに戻る
+                    </button>
+                    <PvPBattle 
+                      leaderboard={leaderboard} 
+                      currentUid={userProfile.uid} 
+                      questions={questions} 
+                      userProfile={userProfile} 
+                      gainXP={gainXP} 
+                    />
                   </div>
-                  
-                  <FolderAndHitManager 
-                    folders={folders}
-                    questions={questions}
-                    selectedFolderId={selectedFolderId}
-                    onSelectFolder={setSelectedFolderId}
-                    onSelectQuestion={setSelectedQuestionId}
-                    userProfile={userProfile}
-                    gainXP={gainXP}
-                  />
-                </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <h3 className="text-sm font-black text-stone-800">📁 フォルダ & 予想問題一覧</h3>
+                      <div className="flex gap-2">
+                        <button onClick={() => setShowPvP(true)} className="bg-gradient-to-r from-amber-500 to-orange-500 text-white px-3 py-1.5 rounded-xl text-xs font-black shadow-sm">
+                          ⚔️ 対戦モード
+                        </button>
+                        <button onClick={() => setIsFlashcardMode(true)} className="bg-white border border-amber-300 text-amber-600 px-3 py-1.5 rounded-xl text-xs font-black hover:bg-amber-50 shadow-sm">
+                          🎴 暗記カード
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <FolderAndHitManager 
+                      folders={folders}
+                      questions={questions}
+                      selectedFolderId={selectedFolderId}
+                      onSelectFolder={setSelectedFolderId}
+                      onSelectQuestion={setSelectedQuestionId}
+                      userProfile={userProfile}
+                      gainXP={gainXP}
+                    />
+                  </div>
+                )}
               </div>
             )}
             {activeTab === 'create' && <CreateCardView folders={folders} userProfile={userProfile} onSuccess={() => { gainXP(50, 'totalPosts'); setActiveTab('home'); }} />}
@@ -256,10 +271,10 @@ export default function App() {
 
       {/* ボトムナビゲーション */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-amber-200 p-2 z-30 flex justify-around shadow-lg rounded-t-3xl">
-        <NavBtn active={activeTab === 'home'} icon={<Home className="w-6 h-6" />} label="バトル" onClick={() => { setActiveTab('home'); setSelectedQuestionId(null); setIsFlashcardMode(false); }} />
-        <NavBtn active={activeTab === 'create'} icon={<PlusCircle className="w-6 h-6" />} label="カード作成" onClick={() => { setActiveTab('create'); setSelectedQuestionId(null); setIsFlashcardMode(false); }} />
-        <NavBtn active={activeTab === 'chat'} icon={<MessageCircle className="w-6 h-6" />} label="チャット" onClick={() => { setActiveTab('chat'); setSelectedQuestionId(null); setIsFlashcardMode(false); }} />
-        <NavBtn active={activeTab === 'ranking'} icon={<Trophy className="w-6 h-6" />} label="順位" onClick={() => { setActiveTab('ranking'); setSelectedQuestionId(null); setIsFlashcardMode(false); }} />
+        <NavBtn active={activeTab === 'home'} icon={<Home className="w-6 h-6" />} label="ホーム" onClick={() => { setActiveTab('home'); setSelectedQuestionId(null); setIsFlashcardMode(false); setShowPvP(false); }} />
+        <NavBtn active={activeTab === 'create'} icon={<PlusCircle className="w-6 h-6" />} label="問題作成" onClick={() => { setActiveTab('create'); setSelectedQuestionId(null); setIsFlashcardMode(false); setShowPvP(false); }} />
+        <NavBtn active={activeTab === 'chat'} icon={<MessageCircle className="w-6 h-6" />} label="チャット" onClick={() => { setActiveTab('chat'); setSelectedQuestionId(null); setIsFlashcardMode(false); setShowPvP(false); }} />
+        <NavBtn active={activeTab === 'ranking'} icon={<Trophy className="w-6 h-6" />} label="順位" onClick={() => { setActiveTab('ranking'); setSelectedQuestionId(null); setIsFlashcardMode(false); setShowPvP(false); }} />
       </nav>
 
       {/* モーダル群 */}
@@ -280,7 +295,7 @@ export default function App() {
               {leaderboard.map(u => (
                 <div key={u.uid} className="bg-amber-50/50 p-3 rounded-2xl flex items-center justify-between border border-amber-100">
                   <div className="flex items-center gap-2">
-                    <span className="text-2xl">{u.avatar || '⚔️'}</span>
+                    <span className="text-2xl">{u.avatar || '🎓'}</span>
                     <div>
                       <div className="text-xs font-extrabold text-stone-800">{u.name}</div>
                       <div className="text-[10px] text-amber-600 font-bold">Lv.{u.level || 1} • {u.xp || 0} XP</div>
@@ -332,8 +347,8 @@ export default function App() {
       {showHelpModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white p-6 rounded-3xl max-w-sm w-full border border-amber-200 text-stone-800 shadow-2xl space-y-4">
-            <h3 className="font-black text-lg text-center text-amber-600 border-b border-amber-100 pb-3">遊び方ガイド</h3>
-            <p className="text-xs text-stone-600 leading-relaxed font-bold">1. 同じルームの仲間を選んで 1対1 の対戦バトル！<br/>2. 正解すると攻撃！先に相手のHPを0にしよう！<br/>3. フォルダで問題を整理したり、暗記カードで復習も可能！</p>
+            <h3 className="font-black text-lg text-center text-amber-600 border-b border-amber-100 pb-3">使い方ガイド</h3>
+            <p className="text-xs text-stone-600 leading-relaxed font-bold">1. クラスやグループの予想問題を投稿・整理！<br/>2. 暗記カード機能でサクサクテスト対策。<br/>3. お楽しみ機能として対戦モードも遊べます！</p>
             <button onClick={() => setShowHelpModal(false)} className="w-full bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-xl font-black text-xs shadow-md">閉じる</button>
           </div>
         </div>
@@ -342,21 +357,24 @@ export default function App() {
   );
 }
 
-// サブ: カード作成
+// サブ: 問題作成画面（カード威力は乱数で設定）
 function CreateCardView({ folders, userProfile, onSuccess }) {
   const [subject, setSubject] = useState(SUBJECTS[0]);
   const [folderId, setFolderId] = useState('');
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
-  const [atk, setAtk] = useState(250);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!question.trim()) return;
+    
+    // カード威力を150〜500の乱数で自動決定
+    const randomAtk = Math.floor(Math.random() * 351) + 150;
+
     try {
       await addDoc(collection(db, 'questions'), {
         subject, folderId, author: userProfile.name, avatar: userProfile.avatar, uid: userProfile.uid, secretCode: userProfile.secretCode,
-        atk: Number(atk), subQuestions: [{ question, answer }], comments: [], createdAt: new Date().toLocaleDateString('ja-JP')
+        atk: randomAtk, subQuestions: [{ question, answer }], comments: [], createdAt: new Date().toLocaleDateString('ja-JP')
       });
       onSuccess();
     } catch (err) { alert('作成失敗'); }
@@ -364,7 +382,7 @@ function CreateCardView({ folders, userProfile, onSuccess }) {
 
   return (
     <form onSubmit={handleSubmit} className="bg-white p-6 rounded-3xl space-y-4 border border-amber-200 max-w-xl mx-auto shadow-lg">
-      <h2 className="text-lg font-black text-amber-600 flex items-center gap-2"><PlusCircle className="w-5 h-5"/> 新しいスキルカードを作成</h2>
+      <h2 className="text-lg font-black text-amber-600 flex items-center gap-2"><PlusCircle className="w-5 h-5"/> 新しい予想問題を投稿</h2>
       
       <div className="grid grid-cols-2 gap-2">
         <select value={subject} onChange={e => setSubject(e.target.value)} className="bg-amber-50/50 border border-amber-200 p-3 rounded-xl text-xs font-bold text-stone-800">
@@ -378,11 +396,8 @@ function CreateCardView({ folders, userProfile, onSuccess }) {
 
       <input type="text" required value={question} onChange={e => setQuestion(e.target.value)} placeholder="予想問題を入力..." className="w-full bg-amber-50/50 border border-amber-200 p-3 rounded-xl text-xs font-bold text-stone-800 outline-none focus:border-amber-500" />
       <input type="text" required value={answer} onChange={e => setAnswer(e.target.value)} placeholder="正解・解説を入力..." className="w-full bg-amber-50/50 border border-amber-200 p-3 rounded-xl text-xs font-bold text-rose-600 outline-none focus:border-rose-400" />
-      <div>
-        <label className="text-[10px] font-bold text-stone-500 block mb-1">カード威力 (ATK): {atk}</label>
-        <input type="range" min="100" max="600" value={atk} onChange={e => setAtk(e.target.value)} className="w-full accent-amber-500" />
-      </div>
-      <button type="submit" className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-white py-3.5 rounded-xl font-black text-xs shadow-md shadow-amber-500/20">カードを生成する (+50 XP)</button>
+      
+      <button type="submit" className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-white py-3.5 rounded-xl font-black text-xs shadow-md shadow-amber-500/20">問題を投稿する (+50 XP)</button>
     </form>
   );
 }
@@ -414,17 +429,17 @@ function ChatView({ userProfile, onMessageSent }) {
 
   return (
     <div className="flex flex-col space-y-3 h-[calc(100vh-160px)]">
-      <h2 className="text-base font-black text-stone-800 flex items-center gap-2"><MessageCircle className="w-5 h-5 text-amber-500"/> 作戦チャット</h2>
+      <h2 className="text-base font-black text-stone-800 flex items-center gap-2"><MessageCircle className="w-5 h-5 text-amber-500"/> チャット</h2>
       <div className="flex-1 bg-white rounded-3xl border border-amber-200 p-4 overflow-y-auto space-y-3 shadow-inner">
         {messages.map(msg => (
           <div key={msg.id} className={`flex gap-2 ${msg.uid === userProfile.uid ? 'flex-row-reverse' : 'flex-row'}`}>
-            <span className="text-xl">{msg.avatar || '⚔️'}</span>
+            <span className="text-xl">{msg.avatar || '🎓'}</span>
             <div className={`p-3 rounded-2xl text-xs font-bold ${msg.uid === userProfile.uid ? 'bg-amber-500 text-white shadow-sm' : 'bg-amber-100/70 text-stone-800'}`}>{msg.text}</div>
           </div>
         ))}
       </div>
       <form onSubmit={handleSend} className="flex gap-2">
-        <input type="text" value={newMessage} onChange={e => setNewMessage(e.target.value)} placeholder="作戦を入力..." className="flex-1 bg-white border border-amber-200 p-3 rounded-2xl text-xs font-bold text-stone-800 outline-none focus:border-amber-400 shadow-sm" />
+        <input type="text" value={newMessage} onChange={e => setNewMessage(e.target.value)} placeholder="メッセージを入力..." className="flex-1 bg-white border border-amber-200 p-3 rounded-2xl text-xs font-bold text-stone-800 outline-none focus:border-amber-400 shadow-sm" />
         <button type="submit" className="bg-amber-500 hover:bg-amber-600 text-white p-3 rounded-2xl font-black shadow-md"><Send className="w-4 h-4"/></button>
       </form>
     </div>
@@ -441,7 +456,7 @@ function RankingView({ leaderboard, currentUid }) {
           <div key={u.uid} className="bg-white p-3.5 rounded-2xl flex items-center justify-between border border-amber-200/80 shadow-sm">
             <div className="flex items-center gap-3">
               <span className="font-black text-sm text-stone-400">{i+1}</span>
-              <span className="text-2xl">{u.avatar || '⚔️'}</span>
+              <span className="text-2xl">{u.avatar || '🎓'}</span>
               <div><div className="text-xs font-extrabold text-stone-800">{u.name} {u.uid === currentUid && <span className="text-[9px] bg-amber-500 text-white px-1.5 py-0.5 rounded-md font-black">あなた</span>}</div><div className="text-[10px] font-bold text-amber-600">Lv.{u.level || 1}</div></div>
             </div>
             <span className="text-xs font-black text-stone-700">{u.xp || 0} XP</span>
