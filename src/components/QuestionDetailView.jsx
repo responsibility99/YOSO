@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Zap, MessageCircle, Send, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Zap, MessageCircle, Send } from 'lucide-react';
 import { SUBJECT_ELEMENTS } from './BossBattle';
 
-// 予想問題の詳細・ボス攻撃・作戦チャット画面
 export default function QuestionDetailView({ 
   question, 
   currentUid, 
@@ -19,10 +18,8 @@ export default function QuestionDetailView({
   const elemInfo = SUBJECT_ELEMENTS[question.subject] || { name: '✨ 光属性', color: 'bg-amber-400 text-stone-900' };
   const atk = question.atk || 200;
 
-  // ボス攻撃ロジック
   const handleAttack = () => {
     setShowAnswer(true);
-    // 50%の確率でクリティカル発生
     const isCrit = Math.random() > 0.5;
     const finalDmg = isCrit ? Math.floor(atk * 2) : atk;
     
@@ -34,7 +31,6 @@ export default function QuestionDetailView({
     );
   };
 
-  // コメント送信ハンドラー
   const handleCommentSubmit = (e) => {
     e.preventDefault();
     if (!commentText.trim()) return;
@@ -43,8 +39,7 @@ export default function QuestionDetailView({
   };
 
   return (
-    <div className="space-y-4 max-w-xl mx-auto w-full animate-fade-in">
-      {/* 戻るボタン */}
+    <div className="space-y-4 max-w-xl mx-auto w-full">
       <button 
         onClick={onBack} 
         className="flex items-center gap-1 text-xs font-bold text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-1.5 rounded-full transition"
@@ -52,7 +47,6 @@ export default function QuestionDetailView({
         <ArrowLeft className="w-4 h-4" /> 戻る
       </button>
 
-      {/* カードメイン（問題＆攻撃アクション） */}
       <div className="bg-slate-800 p-6 rounded-3xl border border-slate-700 space-y-5 relative overflow-hidden shadow-2xl">
         <div className="flex justify-between items-center">
           <span className={`text-[10px] font-black px-3 py-1 rounded-full ${elemInfo.color}`}>
@@ -69,9 +63,8 @@ export default function QuestionDetailView({
             Q. {question.subQuestions?.[0]?.question || '問題文がありません'}
           </h3>
 
-          {/* 解答エリア */}
           {showAnswer ? (
-            <div className="bg-rose-950/60 border border-rose-500/50 p-4 rounded-2xl text-rose-200 font-black text-sm space-y-1 animate-fade-in">
+            <div className="bg-rose-950/60 border border-rose-500/50 p-4 rounded-2xl text-rose-200 font-black text-sm space-y-1">
               <div className="text-[10px] text-rose-400 font-bold">正解・解説</div>
               <div>{question.subQuestions?.[0]?.answer || '解答がありません'}</div>
             </div>
@@ -85,7 +78,6 @@ export default function QuestionDetailView({
           )}
         </div>
 
-        {/* 戦闘ログ通知 */}
         {battleLog && (
           <div className="text-center text-xs font-black text-amber-300 bg-amber-950/50 p-3 rounded-2xl border border-amber-500/40 animate-bounce">
             {battleLog}
@@ -93,7 +85,6 @@ export default function QuestionDetailView({
         )}
       </div>
 
-      {/* 作戦会議チャット（カードごとのスレッド） */}
       <div className="bg-slate-800 p-5 rounded-3xl border border-slate-700 space-y-4 shadow-xl">
         <h4 className="font-extrabold text-xs text-slate-300 flex items-center gap-2">
           <MessageCircle className="w-4 h-4 text-amber-400" /> 作戦会議コメント
@@ -132,7 +123,6 @@ export default function QuestionDetailView({
   );
 }
 
-// 暗記カード（単語帳）コンポーネント
 export function FlashcardView({ questions, onBack }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
@@ -148,7 +138,7 @@ export function FlashcardView({ questions, onBack }) {
   const currentQ = questions[currentIndex];
 
   return (
-    <div className="space-y-4 max-w-lg mx-auto w-full animate-fade-in">
+    <div className="space-y-4 max-w-lg mx-auto w-full">
       <div className="flex justify-between items-center">
         <button 
           onClick={onBack} 
