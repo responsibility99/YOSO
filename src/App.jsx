@@ -5,7 +5,7 @@ import {
   MessageCircle, Send, Trophy, Medal, Flame, KeyRound, LogOut,
   ImagePlus, X, HelpCircle, Edit, QrCode, Share2, Target, PartyPopper,
   ArrowUpDown, History, ShieldCheck, Plus, Edit2, Layers, CheckCircle2, XCircle,
-  Users, Filter, Award, ChevronRight
+  Menu, Users, UserX, Filter, MoreHorizontal
 } from 'lucide-react';
 import { db } from './firebase';
 import { 
@@ -17,7 +17,7 @@ import './index.css';
 const ADMIN_PASSWORD = 'admin123';
 
 const SUBJECTS = [
-  '国語1', '国語２a', '国語２ｂ', '歴史', '地理', 
+  'すべて', '国語1', '国語２a', '国語２ｂ', '歴史', '地理', 
   '数学Ａ', '数学Ｂ', '化学', '生物', '地学', 
   '音楽', '英語１', '英語２'
 ];
@@ -42,15 +42,16 @@ export default function App() {
     const defaultUid = 'user_' + Date.now() + Math.floor(Math.random()*1000);
     return saved ? JSON.parse(saved) : { 
       uid: defaultUid, name: 'テスト対策生', avatar: '🎓', testDate: '',
-      xp: 0, level: 1, totalPosts: 0, totalChats: 0, hitCount: 0, secretCode: '' 
+      xp: 0, level: 1, totalPosts: 0, totalChats: 0, hitCount: 0, secretCode: '', banned: false
     };
   });
 
   const [showProfileModal, setShowProfileModal] = useState(false);
-  const [showMembersModal, setShowMembersModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showMembersModal, setShowMembersModal] = useState(false);
+  const [showMenuDrawer, setShowMenuDrawer] = useState(false);
   const [showLevelUp, setShowLevelUp] = useState(false);
   const [tempCode, setTempCode] = useState('');
 
@@ -59,24 +60,38 @@ export default function App() {
   const [showFolderModal, setShowFolderModal] = useState(false);
   const [questions, setQuestions] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
-  const [allUsers, setAllUsers] = useState([]);
   
   const [historyList, setHistoryList] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
 
   const [hitAnnouncement, setHitAnnouncement] = useState(null);
 
+  // ユーザーのBAN状態/グループ所属判定のリアルタイム監視
   useEffect(() => {
-    if (!userProfile.secretCode) return;
+    if (!userProfile.uid || !userProfile.secretCode) return;
+    const unsub = onSnapshot(doc(db, 'users', userProfile.uid), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.banned) {
+          alert('管理者によってグループから追放（BAN）されました。');
+          setUserProfile(prev => ({ ...prev, secretCode: '', banned: true }));
+        }
+      }
+    });
+    return () => unsub();
+  }, [userProfile.uid, userProfile.secretCode]);
+
+  useEffect(() => {
+    if (!userProfile.secretCode || userProfile.banned) return;
     const unsub = onSnapshot(collection(db, 'folders'), (snapshot) => {
       const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       setFolders(data.filter(d => d.secretCode === userProfile.secretCode));
     });
     return () => unsub();
-  }, [userProfile.secretCode]);
+  }, [userProfile.secretCode, userProfile.banned]);
 
   useEffect(() => {
-    if (!userProfile.secretCode) return;
+    if (!userProfile.secretCode || userProfile.banned) return;
     const unsub = onSnapshot(collection(db, 'questions'), (snapshot) => {
       const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       const groupQuestions = data.filter(d => d.secretCode === userProfile.secretCode);
@@ -92,19 +107,17 @@ export default function App() {
       }
     });
     return () => unsub();
-  }, [userProfile.secretCode]);
+  }, [userProfile.secretCode, userProfile.banned]);
 
   useEffect(() => {
-    if (!userProfile.secretCode) return;
+    if (!userProfile.secretCode || userProfile.banned) return;
     const q = query(collection(db, 'users'), orderBy('xp', 'desc'));
     const unsub = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      const filtered = data.filter(d => d.secretCode === userProfile.secretCode);
-      setLeaderboard(filtered.slice(0, 30));
-      setAllUsers(filtered);
+      setLeaderboard(data.filter(d => d.secretCode === userProfile.secretCode));
     });
     return () => unsub();
-  }, [userProfile.secretCode]);
+  }, [userProfile.secretCode, userProfile.banned]);
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'app_history'), (snapshot) => {
@@ -118,7 +131,7 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('study_app_user_v6', JSON.stringify(userProfile));
     
-    if (userProfile.uid && userProfile.secretCode) {
+    if (userProfile.uid && userProfile.secretCode && !userProfile.banned) {
       const userRef = doc(db, 'users', userProfile.uid);
       setDoc(userRef, userProfile, { merge: true }).catch(e => console.error(e));
     }
@@ -153,8 +166,23 @@ export default function App() {
         lastHitAt: isAlreadyHit ? null : Date.now()
       });
 
-      if (!isAlreadyHit) gainXP(15, 'hitCount');
+      if (!isAlreadyHit) gainXP(15, null);
     } catch (err) {}
+  };
+
+  const handleKickUser = async (targetUid, targetName) => {
+    if (!isAdmin) return;
+    if (window.confirm(`「${targetName}」さんをグループからキック（追放）しますか？`)) {
+      try {
+        await updateDoc(doc(db, 'users', targetUid), {
+          secretCode: '',
+          banned: true
+        });
+        alert(`${targetName} さんを追放しました。`);
+      } catch (err) {
+        alert('追放処理に失敗しました。');
+      }
+    }
   };
 
   const getDaysUntilTest = () => {
@@ -185,6 +213,16 @@ export default function App() {
     } catch (err) {}
   };
 
+  const handleUnlockAdminPrompt = () => {
+    const pwd = window.prompt('管理者パスワードを入力してください:');
+    if (pwd === ADMIN_PASSWORD) {
+      setIsAdmin(true);
+      alert('管理者権限が有効化されました！メンバーのキックやアプリの歴史編集が可能です。');
+    } else if (pwd !== null) {
+      alert('パスワードが間違っています。');
+    }
+  };
+
   if (!userProfile.secretCode) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-amber-100 via-orange-100 to-rose-200 flex items-center justify-center p-4">
@@ -194,7 +232,7 @@ export default function App() {
           </div>
           <h1 className="text-2xl font-black text-stone-800">グループに参加</h1>
           <p className="text-xs font-bold text-stone-500 leading-relaxed">仲間と同じ合言葉を入力して、<br/>専用の学習ルームに入ろう！</p>
-          <form onSubmit={(e) => { e.preventDefault(); if(tempCode.trim()) setUserProfile({...userProfile, secretCode: tempCode.trim()}); }}>
+          <form onSubmit={(e) => { e.preventDefault(); if(tempCode.trim()) setUserProfile({...userProfile, secretCode: tempCode.trim(), banned: false}); }}>
             <input type="text" required value={tempCode} onChange={e => setTempCode(e.target.value)} placeholder="例: class2a" className="w-full border-2 border-stone-200 focus:border-amber-500 p-4 rounded-2xl text-center text-lg font-black outline-none transition mb-4 shadow-inner" />
             <button type="submit" className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white py-4 rounded-2xl font-black shadow-lg shadow-orange-500/25 transition transform active:scale-95">ルームに入る</button>
           </form>
@@ -235,44 +273,88 @@ export default function App() {
       )}
 
       {showLevelUp && (
-        <div className="fixed top-24 left-0 right-0 z-50 flex justify-center animate-bounce">
+        <div className="fixed top-20 left-0 right-0 z-50 flex justify-center animate-bounce">
           <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-6 py-3 rounded-full shadow-2xl font-extrabold text-lg flex items-center gap-2 border-4 border-white">
             <Flame className="w-6 h-6 text-yellow-100" /> レベルアップ！ Lv.{userProfile.level}
           </div>
         </div>
       )}
 
-      {/* 2段レイアウト・ヘッダー */}
-      <header className="bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 sticky top-0 z-30 shadow-md rounded-b-3xl px-4 py-3 text-white space-y-2">
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-2 cursor-pointer" onClick={() => { setActiveTab('home'); setSelectedQuestionId(null); setSelectedFolderId(null); }}>
-            <div className="bg-white/20 p-2 rounded-2xl backdrop-blur-md shadow-inner"><BookOpen className="w-5 h-5 text-white" /></div>
-            <h1 className="font-black text-xl tracking-wider drop-shadow-md">YOSO</h1>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button onClick={() => setShowMembersModal(true)} className="bg-white/20 hover:bg-white/30 text-white px-3 py-1.5 rounded-full text-xs font-bold backdrop-blur-md border border-white/30 shadow-sm transition flex items-center gap-1 active:scale-95">
-              <Users className="w-3.5 h-3.5" /> メンバー({allUsers.length})
-            </button>
-            <button onClick={() => setShowProfileModal(true)} className="bg-white/20 hover:bg-white/30 text-white px-3 py-1.5 rounded-full text-xs font-bold backdrop-blur-md border border-white/30 shadow-sm transition flex items-center gap-2 active:scale-95">
-              <span className="bg-yellow-300 text-stone-900 px-2 py-0.5 rounded-full text-[10px] font-black">Lv.{userProfile.level}</span>
-              <span className="truncate max-w-[90px]">{userProfile.avatar} {userProfile.name}</span>
-            </button>
-          </div>
+      {/* スッキリ整理したコンパクト・ヘッダー */}
+      <header className="bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 sticky top-0 z-30 shadow-md rounded-b-2xl px-4 py-2.5 text-white flex items-center justify-between">
+        <div className="flex items-center gap-2 cursor-pointer" onClick={() => { setActiveTab('home'); setSelectedQuestionId(null); setSelectedFolderId(null); }}>
+          <div className="bg-white/20 p-2 rounded-xl backdrop-blur-md shadow-inner"><BookOpen className="w-5 h-5 text-white" /></div>
+          <h1 className="font-black text-xl tracking-wider drop-shadow-md">YOSO</h1>
         </div>
 
-        <div className="flex items-center justify-end gap-2 pt-1 border-t border-white/20">
-          <button onClick={() => setShowQrModal(true)} className="bg-white/90 hover:bg-white text-orange-600 px-3 py-1.5 rounded-xl text-xs font-extrabold shadow-sm transition flex items-center gap-1 active:scale-95">
-            <QrCode className="w-3.5 h-3.5" /> 招待QR
+        <div className="flex items-center gap-2">
+          {isAdmin && (
+            <span className="bg-yellow-300 text-stone-900 text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+              <ShieldCheck className="w-3 h-3" /> ADMIN
+            </span>
+          )}
+          
+          <button onClick={() => setShowProfileModal(true)} className="bg-white/20 hover:bg-white/30 text-white px-3 py-1 rounded-full text-xs font-bold backdrop-blur-md border border-white/30 shadow-sm transition flex items-center gap-1.5 active:scale-95">
+            <span className="bg-yellow-300 text-stone-900 px-1.5 py-0.2 rounded-full text-[10px] font-black">Lv.{userProfile.level}</span>
+            <span className="truncate max-w-[80px]">{userProfile.avatar} {userProfile.name}</span>
           </button>
-          <button onClick={() => setShowHistoryModal(true)} className="bg-white/90 hover:bg-white text-purple-600 px-3 py-1.5 rounded-xl text-xs font-extrabold shadow-sm transition flex items-center gap-1 active:scale-95">
-            <History className="w-3.5 h-3.5" /> アプリの歴史
-          </button>
-          <button onClick={() => setShowHelpModal(true)} className="bg-white/90 hover:bg-white text-amber-700 px-3 py-1.5 rounded-xl text-xs font-extrabold shadow-sm transition flex items-center gap-1 active:scale-95">
-            <HelpCircle className="w-3.5 h-3.5" /> 使い方
+
+          {/* コンパクトなドロワーメニューボタン */}
+          <button onClick={() => setShowMenuDrawer(true)} className="bg-white/20 hover:bg-white/30 p-2 rounded-xl backdrop-blur-md border border-white/30 text-white transition active:scale-95">
+            <Menu className="w-5 h-5" />
           </button>
         </div>
       </header>
+
+      {/* スライドイン型サブメニュー（Drawer） */}
+      {showMenuDrawer && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex justify-end animate-fade-in">
+          <div className="bg-white w-72 h-full shadow-2xl p-5 flex flex-col justify-between animate-slide-left">
+            <div>
+              <div className="flex items-center justify-between border-b pb-3 mb-4">
+                <h3 className="font-black text-lg text-stone-800 flex items-center gap-2">
+                  <Menu className="w-5 h-5 text-amber-500"/> メニュー
+                </h3>
+                <button onClick={() => setShowMenuDrawer(false)} className="p-1 text-stone-400 hover:text-stone-600 rounded-lg"><X className="w-6 h-6"/></button>
+              </div>
+
+              <div className="space-y-2">
+                <button onClick={() => { setShowMenuDrawer(false); setShowQrModal(true); }} className="w-full text-left p-3 rounded-2xl hover:bg-orange-50 text-stone-700 font-extrabold text-sm flex items-center gap-3 transition">
+                  <div className="p-2 bg-orange-100 text-orange-600 rounded-xl"><QrCode className="w-4 h-4"/></div> 招待QRコード
+                </button>
+                <button onClick={() => { setShowMenuDrawer(false); setShowMembersModal(true); }} className="w-full text-left p-3 rounded-2xl hover:bg-indigo-50 text-stone-700 font-extrabold text-sm flex items-center justify-between transition">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-indigo-100 text-indigo-600 rounded-xl"><Users className="w-4 h-4"/></div> メンバー一覧
+                  </div>
+                  <span className="text-xs bg-indigo-100 text-indigo-700 font-black px-2 py-0.5 rounded-full">{leaderboard.length}</span>
+                </button>
+                <button onClick={() => { setShowMenuDrawer(false); setShowHistoryModal(true); }} className="w-full text-left p-3 rounded-2xl hover:bg-purple-50 text-stone-700 font-extrabold text-sm flex items-center gap-3 transition">
+                  <div className="p-2 bg-purple-100 text-purple-600 rounded-xl"><History className="w-4 h-4"/></div> アプリの歴史
+                </button>
+                <button onClick={() => { setShowMenuDrawer(false); setShowHelpModal(true); }} className="w-full text-left p-3 rounded-2xl hover:bg-amber-50 text-stone-700 font-extrabold text-sm flex items-center gap-3 transition">
+                  <div className="p-2 bg-amber-100 text-amber-600 rounded-xl"><HelpCircle className="w-4 h-4"/></div> 使い方ガイド
+                </button>
+              </div>
+            </div>
+
+            <div className="border-t pt-3 space-y-2">
+              {!isAdmin ? (
+                <button onClick={handleUnlockAdminPrompt} className="w-full py-2 bg-stone-100 hover:bg-purple-50 text-stone-600 hover:text-purple-700 rounded-xl text-xs font-bold flex items-center justify-center gap-1">
+                  🔑 管理者権限を解除
+                </button>
+              ) : (
+                <div className="bg-purple-50 p-3 rounded-xl border border-purple-200 text-center space-y-1">
+                  <p className="text-[11px] font-black text-purple-800 flex items-center justify-center gap-1"><ShieldCheck className="w-3.5 h-3.5"/> 管理者モード有効中</p>
+                  <p className="text-[10px] text-stone-500">メンバー一覧からユーザーの追放が可能です</p>
+                </div>
+              )}
+              <button onClick={() => { if(window.confirm('グループから退出しますか？')) { setUserProfile({...userProfile, secretCode: ''}); setShowMenuDrawer(false); } }} className="w-full py-2 text-xs font-bold text-rose-500 flex justify-center items-center gap-1 hover:bg-rose-50 rounded-xl">
+                <LogOut className="w-4 h-4"/> グループを変更する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <main className="max-w-4xl mx-auto p-4 flex-1 w-full flex flex-col">
         {activeTab === 'home' && !selectedQuestionId && !selectedFolderId && (
@@ -312,7 +394,7 @@ export default function App() {
             {activeTab === 'home' && <HomeView folders={folders} questions={questions} onSelectQuestion={setSelectedQuestionId} onOpenFolderModal={() => setShowFolderModal(true)} onToggleLike={handleToggleLike} secretCode={userProfile.secretCode} selectedFolderId={selectedFolderId} onSelectFolder={setSelectedFolderId} onOpenQr={() => setShowQrModal(true)} />}
             {activeTab === 'create' && <CreateQuestionView folders={folders} defaultFolderId={selectedFolderId || (folders[0]?.id || '')} userProfile={userProfile} onSuccess={() => { gainXP(50, 'totalPosts'); setActiveTab('home'); }} />}
             {activeTab === 'chat' && <ChatView userProfile={userProfile} onMessageSent={() => gainXP(10, 'totalChats')} />}
-            {activeTab === 'ranking' && <RankingView leaderboard={leaderboard} currentUid={userProfile.uid} onOpenMembers={() => setShowMembersModal(true)} />}
+            {activeTab === 'ranking' && <RankingView leaderboard={leaderboard} currentUid={userProfile.uid} isAdmin={isAdmin} onKickUser={handleKickUser} onOpenMembers={() => setShowMembersModal(true)} />}
           </>
         )}
       </main>
@@ -324,12 +406,15 @@ export default function App() {
         <NavButton active={activeTab === 'ranking'} icon={<Trophy className="w-6 h-6" />} label="ランキング" onClick={() => { setActiveTab('ranking'); setSelectedQuestionId(null); }} />
       </nav>
 
-      {/* ユーザープロフィール一覧（全員のプロフィール）モーダル */}
+      {/* メンバー一覧・荒らし追放モーダル */}
       {showMembersModal && (
-        <AllUsersModal 
-          users={allUsers} 
-          currentUid={userProfile.uid} 
+        <MembersModal 
+          members={leaderboard} 
+          currentUid={userProfile.uid}
+          isAdmin={isAdmin} 
           onClose={() => setShowMembersModal(false)} 
+          onKick={handleKickUser}
+          onUnlockAdmin={handleUnlockAdminPrompt}
         />
       )}
 
@@ -339,15 +424,7 @@ export default function App() {
           historyList={historyList} 
           isAdmin={isAdmin} 
           onClose={() => setShowHistoryModal(false)} 
-          onUnlockAdmin={() => {
-            const pwd = window.prompt('管理者パスワードを入力してください:');
-            if (pwd === ADMIN_PASSWORD) {
-              setIsAdmin(true);
-              alert('管理者モード有効！歴史の追加・編集・削除が可能です。');
-            } else if (pwd !== null) {
-              alert('パスワードが違います。');
-            }
-          }}
+          onUnlockAdmin={handleUnlockAdminPrompt}
         />
       )}
 
@@ -395,11 +472,11 @@ export default function App() {
             <div className="overflow-y-auto pr-2 space-y-4 flex-1 text-sm font-bold text-stone-700">
               <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100">
                 <h4 className="text-amber-800 font-extrabold mb-1">🔑 グループ（合言葉）</h4>
-                <p className="text-xs">同じ合言葉を入力した人同士で問題やチャットが共有されます。右上のQRコードから友達を呼び込もう！</p>
+                <p className="text-xs">同じ合言葉を入力した人同士で問題やチャットが共有されます。右上のメニューから招待QRコードを表示できます。</p>
               </div>
-              <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100">
-                <h4 className="text-orange-800 font-extrabold mb-1">🎴 暗記カード（単語帳）</h4>
-                <p className="text-xs">ホーム右上から暗記カードモードを起動できます。教科やフォルダで範囲を絞り込んで復習可能です！</p>
+              <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100">
+                <h4 className="text-indigo-800 font-extrabold mb-1">🎴 暗記カード（単語帳）</h4>
+                <p className="text-xs">問題一覧の「🎴 単語帳」から、教科やフォルダを絞り込んで復習カードを作成できます。</p>
               </div>
               <div className="bg-rose-50 p-4 rounded-2xl border border-rose-100">
                 <h4 className="text-rose-800 font-extrabold mb-1">🎯 テスト的中（神予想！）</h4>
@@ -413,7 +490,7 @@ export default function App() {
         </div>
       )}
 
-      {/* マイプロフィールモーダル */}
+      {/* プロフィールモーダル */}
       {showProfileModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white p-6 rounded-3xl max-w-sm w-full shadow-2xl flex flex-col max-h-[85vh]">
@@ -443,11 +520,7 @@ export default function App() {
               </div>
             </div>
             <div className="mt-4 pt-3 border-t flex flex-col gap-2">
-              <button onClick={() => { setShowProfileModal(false); setShowMembersModal(true); }} className="w-full bg-stone-100 hover:bg-stone-200 text-stone-700 py-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1">
-                <Users className="w-4 h-4 text-stone-500"/> グループ全員のプロフィールを見る
-              </button>
               <button onClick={() => setShowProfileModal(false)} className="w-full bg-amber-500 text-white py-3 rounded-xl text-sm font-extrabold shadow-lg">保存して閉じる</button>
-              <button onClick={() => { if(window.confirm('グループから退出しますか？')) { setUserProfile({...userProfile, secretCode: ''}); setShowProfileModal(false); } }} className="w-full py-2 text-xs font-bold text-rose-500 flex justify-center items-center gap-1"><LogOut className="w-4 h-4"/> 別の合言葉に変更する</button>
             </div>
           </div>
         </div>
@@ -467,124 +540,24 @@ export default function App() {
   );
 }
 
-// ユーザープロフィール一覧（全員のプロフィール）モーダル
-function AllUsersModal({ users, currentUid, onClose }) {
-  const [selectedUser, setSelectedUser] = useState(null);
-
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-white p-6 rounded-3xl max-w-md w-full shadow-2xl flex flex-col max-h-[85vh]">
-        <div className="flex justify-between items-center border-b pb-3 mb-3">
-          <h3 className="font-extrabold text-xl text-amber-900 flex items-center gap-2">
-            <Users className="w-6 h-6 text-amber-500" /> メンバープロフィール一覧
-          </h3>
-          <span className="text-xs font-bold text-stone-400">{users.length} 名</span>
-        </div>
-
-        <div className="overflow-y-auto pr-1 space-y-3 flex-1">
-          {users.map((u) => {
-            const userBadges = BADGES.filter(b => (u[b.type] || 0) >= b.req);
-            const isMe = u.uid === currentUid;
-
-            return (
-              <div 
-                key={u.uid || u.id} 
-                onClick={() => setSelectedUser(selectedUser?.uid === u.uid ? null : u)}
-                className={`p-4 rounded-2xl border-2 transition cursor-pointer ${isMe ? 'bg-amber-50/80 border-amber-300' : 'bg-stone-50 hover:bg-stone-100 border-stone-200'}`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-2xl shadow-sm border border-stone-200">
-                      {u.avatar || '🎓'}
-                    </div>
-                    <div>
-                      <div className="font-black text-stone-800 text-base flex items-center gap-1.5">
-                        {u.name || '名前未設定'}
-                        {isMe && <span className="bg-amber-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full">あなた</span>}
-                      </div>
-                      <div className="flex items-center gap-2 text-xs font-bold text-stone-500 mt-0.5">
-                        <span className="text-amber-600">Lv.{u.level || 1}</span>
-                        <span>•</span>
-                        <span>{u.xp || 0} XP</span>
-                        {(u.hitCount > 0) && (
-                          <>
-                            <span>•</span>
-                            <span className="text-rose-500 font-black flex items-center gap-0.5">
-                              🎯 的中 {u.hitCount}
-                            </span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <ChevronRight className={`w-5 h-5 text-stone-400 transition-transform ${selectedUser?.uid === u.uid ? 'rotate-90' : ''}`} />
-                </div>
-
-                {/* 詳細表示 (タップで開く) */}
-                {selectedUser?.uid === u.uid && (
-                  <div className="mt-3 pt-3 border-t border-stone-200 space-y-2 animate-fade-in">
-                    <div className="flex justify-between text-xs font-bold text-stone-600">
-                      <span>問題投稿数: <strong className="text-stone-800">{u.totalPosts || 0}</strong></span>
-                      <span>チャット発言: <strong className="text-stone-800">{u.totalChats || 0}</strong></span>
-                    </div>
-
-                    <div>
-                      <div className="text-[11px] font-extrabold text-stone-500 mb-1 flex items-center gap-1">
-                        <Award className="w-3.5 h-3.5 text-yellow-500" /> 獲得バッジ ({userBadges.length}/{BADGES.length})
-                      </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {userBadges.length === 0 ? (
-                          <span className="text-[10px] text-stone-400 font-bold">まだバッジを獲得していません</span>
-                        ) : (
-                          userBadges.map(b => (
-                            <span key={b.id} className="bg-white border border-yellow-200 px-2 py-1 rounded-lg text-[10px] font-black text-stone-700 flex items-center gap-1 shadow-2xs">
-                              <span>{b.icon}</span> {b.name}
-                            </span>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="mt-4 pt-3 border-t">
-          <button onClick={onClose} className="w-full bg-amber-500 text-white py-3 rounded-xl text-sm font-extrabold shadow-lg">
-            閉じる
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// 暗記カード（単語帳）モードコンポーネント (教科・フォルダ絞り込み対応)
-function FlashcardView({ questions, folders, defaultFolderId, onBack }) {
+// 教科・フォルダで絞り込める暗記カード（単語帳）モードコンポーネント
+function FlashcardView({ questions, folders, onBack }) {
   const [selectedSubject, setSelectedSubject] = useState('すべて');
-  const [selectedFolder, setSelectedFolder] = useState(defaultFolderId || 'ALL');
-  
+  const [selectedFolderId, setSelectedFolderId] = useState('すべて');
+
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
   const [learnedMap, setLearnedMap] = useState({});
 
-  // フィルタリング処理
+  // 絞り込み処理
   const filteredQuestions = questions.filter(q => {
     const matchSubject = selectedSubject === 'すべて' || q.subject === selectedSubject;
-    const matchFolder = selectedFolder === 'ALL' || q.folderId === selectedFolder;
+    const matchFolder = selectedFolderId === 'すべて' || q.folderId === selectedFolderId;
     return matchSubject && matchFolder;
   });
 
-  // フィルター変更時にインデックス初期化
-  useEffect(() => {
-    setCurrentIndex(0);
-    setShowAnswer(false);
-  }, [selectedSubject, selectedFolder]);
-
-  const currentQ = filteredQuestions[currentIndex];
   const total = filteredQuestions.length;
+  const currentQ = filteredQuestions[currentIndex];
 
   const handleNext = () => {
     if (total === 0) return;
@@ -610,60 +583,54 @@ function FlashcardView({ questions, folders, defaultFolderId, onBack }) {
         <button onClick={onBack} className="flex items-center gap-1 text-sm font-extrabold text-stone-600 bg-white border border-stone-200 px-3 py-1.5 rounded-full shadow-sm hover:bg-stone-50">
           <ArrowLeft className="w-4 h-4" /> 戻る
         </button>
-        <span className="text-xs font-black text-amber-800 bg-amber-100 px-3 py-1.5 rounded-full flex items-center gap-1 shadow-sm">
-          <Layers className="w-3.5 h-3.5" /> 🎴 暗記カード ({total > 0 ? currentIndex + 1 : 0} / {total})
+        <span className="text-xs font-black text-amber-700 bg-amber-100 px-3 py-1 rounded-full flex items-center gap-1">
+          <Layers className="w-3.5 h-3.5"/> 暗記カード ({total === 0 ? 0 : currentIndex + 1} / {total})
         </span>
       </div>
 
-      {/* 絞り込み条件（教科 & フォルダ） */}
-      <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3">
-        <div className="flex items-center gap-1.5 text-xs font-black text-amber-800 border-b pb-2">
-          <Filter className="w-3.5 h-3.5 text-amber-600" /> 出題範囲の選択
+      {/* 絞り込みコントロールパネル */}
+      <div className="bg-white p-3.5 rounded-2xl border shadow-sm space-y-2">
+        <div className="text-[11px] font-black text-stone-500 flex items-center gap-1">
+          <Filter className="w-3.5 h-3.5 text-amber-500" /> 出題範囲を指定
         </div>
-        
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="text-[10px] font-bold text-stone-400 mb-1 block">教科</label>
+            <label className="text-[10px] font-bold text-stone-400 block mb-0.5">教科</label>
             <select 
               value={selectedSubject} 
-              onChange={e => setSelectedSubject(e.target.value)} 
-              className="w-full bg-stone-50 border border-stone-200 p-2 rounded-xl text-xs font-bold outline-none text-stone-700"
+              onChange={e => { setSelectedSubject(e.target.value); setCurrentIndex(0); setShowAnswer(false); }}
+              className="w-full bg-stone-50 border border-stone-200 p-2 rounded-xl text-xs font-bold outline-none"
             >
-              <option value="すべて">📚 すべての教科</option>
               {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
-
           <div>
-            <label className="text-[10px] font-bold text-stone-400 mb-1 block">フォルダ</label>
+            <label className="text-[10px] font-bold text-stone-400 block mb-0.5">フォルダ</label>
             <select 
-              value={selectedFolder} 
-              onChange={e => setSelectedFolder(e.target.value)} 
-              className="w-full bg-stone-50 border border-stone-200 p-2 rounded-xl text-xs font-bold outline-none text-stone-700"
+              value={selectedFolderId} 
+              onChange={e => { setSelectedFolderId(e.target.value); setCurrentIndex(0); setShowAnswer(false); }}
+              className="w-full bg-stone-50 border border-stone-200 p-2 rounded-xl text-xs font-bold outline-none truncate"
             >
-              <option value="ALL">📁 すべてのフォルダ</option>
+              <option value="すべて">すべてのフォルダ</option>
               {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
             </select>
           </div>
         </div>
       </div>
 
-      {/* プログレスバー */}
-      <div className="w-full bg-stone-200 h-2.5 rounded-full overflow-hidden p-0.5 border">
-        <div 
-          className="bg-gradient-to-r from-amber-400 to-orange-500 h-1.5 rounded-full transition-all duration-300" 
-          style={{ width: `${total > 0 ? ((currentIndex + 1) / total) * 100 : 0}%` }}
-        ></div>
-      </div>
-
-      {/* 暗記カード本体 */}
       {total === 0 ? (
-        <div className="bg-white p-10 rounded-3xl text-center space-y-3 shadow-md border border-dashed border-stone-300">
-          <p className="text-stone-400 font-extrabold text-sm">選択した範囲に問題がありません</p>
-          <p className="text-xs text-stone-400">教科やフォルダの選択を変更してみてください</p>
+        <div className="bg-white p-8 rounded-3xl text-center space-y-2 shadow-sm border border-dashed border-stone-300">
+          <p className="text-stone-400 font-bold text-sm">指定した条件に一致する問題がありません 💬</p>
+          <p className="text-stone-400 text-xs">教科やフォルダの絞り込みを変更してみてください</p>
         </div>
       ) : (
         <>
+          {/* プログレスバー */}
+          <div className="w-full bg-stone-200 h-2 rounded-full overflow-hidden">
+            <div className="bg-amber-500 h-2 transition-all duration-300" style={{ width: `${((currentIndex + 1) / total) * 100}%` }}></div>
+          </div>
+
+          {/* フリップ暗記カード */}
           <div 
             onClick={() => setShowAnswer(!showAnswer)}
             className="bg-white min-h-[260px] p-6 rounded-3xl border-2 border-amber-200 shadow-xl flex flex-col justify-between cursor-pointer transform transition active:scale-98 relative overflow-hidden"
@@ -680,7 +647,7 @@ function FlashcardView({ questions, folders, defaultFolderId, onBack }) {
               </p>
               <div className="text-lg font-black text-stone-800 leading-relaxed">
                 {showAnswer ? (
-                  <span className="text-rose-600 bg-rose-50 px-3 py-1.5 rounded-xl border border-rose-100 inline-block">
+                  <span className="text-rose-600 bg-rose-50 px-3 py-1 rounded-xl border border-rose-100 inline-block">
                     {currentQ.subQuestions?.[0]?.answer || '解答なし'}
                   </span>
                 ) : (
@@ -696,19 +663,19 @@ function FlashcardView({ questions, folders, defaultFolderId, onBack }) {
 
           {/* 操作アクションボタン */}
           <div className="flex gap-2">
-            <button onClick={() => markLearned(false)} className="flex-1 bg-rose-100 hover:bg-rose-200 text-rose-700 py-3 rounded-2xl font-black text-xs flex items-center justify-center gap-1 transition active:scale-95">
+            <button onClick={() => markLearned(false)} className="flex-1 bg-rose-100 hover:bg-rose-200 text-rose-700 py-3 rounded-2xl font-black text-xs flex items-center justify-center gap-1 transition">
               <XCircle className="w-4 h-4"/> もう一回
             </button>
-            <button onClick={() => markLearned(true)} className="flex-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 py-3 rounded-2xl font-black text-xs flex items-center justify-center gap-1 transition active:scale-95">
+            <button onClick={() => markLearned(true)} className="flex-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 py-3 rounded-2xl font-black text-xs flex items-center justify-center gap-1 transition">
               <CheckCircle2 className="w-4 h-4"/> 覚えた！
             </button>
           </div>
 
           <div className="flex justify-between gap-2 pt-1">
-            <button onClick={handlePrev} className="flex-1 bg-white border border-stone-200 text-stone-600 py-2.5 rounded-xl font-bold text-xs shadow-sm hover:bg-stone-50">
+            <button onClick={handlePrev} className="flex-1 bg-white border border-stone-200 text-stone-600 py-2.5 rounded-xl font-bold text-xs shadow-sm">
               ◀ 前の問題
             </button>
-            <button onClick={handleNext} className="flex-1 bg-amber-500 hover:bg-amber-600 text-white py-2.5 rounded-xl font-bold text-xs shadow-md">
+            <button onClick={handleNext} className="flex-1 bg-amber-500 text-white py-2.5 rounded-xl font-bold text-xs shadow-md">
               次の問題 ▶
             </button>
           </div>
@@ -734,13 +701,13 @@ function HomeView({ folders, questions, onSelectQuestion, onOpenFolderModal, onT
   });
 
   if (isFlashcardMode) {
-    return <FlashcardView questions={questions} folders={folders} defaultFolderId={selectedFolderId} onBack={() => setIsFlashcardMode(false)} />;
+    return <FlashcardView questions={questions} folders={folders} onBack={() => setIsFlashcardMode(false)} />;
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div className="bg-gradient-to-r from-orange-100 to-amber-100 border border-orange-200/80 p-3 rounded-2xl flex items-center justify-between text-xs font-black text-orange-900 shadow-sm">
-        <div className="flex items-center gap-2"><KeyRound className="w-4 h-4 text-orange-600"/> 参加中の合言葉: <span className="bg-white/80 backdrop-blur-sm px-2.5 py-1 rounded-lg border border-orange-200">{secretCode}</span></div>
+        <div className="flex items-center gap-2"><KeyRound className="w-4 h-4 text-orange-600"/> ルーム合言葉: <span className="bg-white/80 backdrop-blur-sm px-2.5 py-1 rounded-lg border border-orange-200">{secretCode}</span></div>
         <button onClick={onOpenQr} className="bg-white text-orange-700 px-3 py-1 rounded-xl border border-orange-200 hover:bg-orange-50 transition flex items-center gap-1 shadow-sm">
           <QrCode className="w-3.5 h-3.5 text-orange-500" /> 招待
         </button>
@@ -748,7 +715,7 @@ function HomeView({ folders, questions, onSelectQuestion, onOpenFolderModal, onT
       
       {!selectedFolderId ? (
         <div>
-          <div className="flex justify-between items-center mb-4"><h2 className="text-lg font-extrabold text-stone-700 flex items-center gap-2"><FolderPlus className="w-5 h-5 text-amber-500" /> フォルダ</h2><button onClick={onOpenFolderModal} className="text-xs text-orange-700 font-extrabold bg-orange-100 px-4 py-2 rounded-full hover:bg-orange-200 transition">＋ 作成</button></div>
+          <div className="flex justify-between items-center mb-3"><h2 className="text-lg font-extrabold text-stone-700 flex items-center gap-2"><FolderPlus className="w-5 h-5 text-amber-500" /> フォルダ</h2><button onClick={onOpenFolderModal} className="text-xs text-orange-700 font-extrabold bg-orange-100 px-4 py-2 rounded-full hover:bg-orange-200 transition">＋ 作成</button></div>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {folders.map(f => (
               <div key={f.id} onClick={() => onSelectFolder(f.id)} className="bg-white p-4 rounded-2xl border shadow-sm cursor-pointer hover:-translate-y-1 transition hover:shadow-md">
@@ -772,9 +739,9 @@ function HomeView({ folders, questions, onSelectQuestion, onOpenFolderModal, onT
           <div className="flex items-center gap-2">
             <button 
               onClick={() => setIsFlashcardMode(true)} 
-              className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white px-3 py-1.5 rounded-xl text-xs font-black shadow-sm flex items-center gap-1 transition transform active:scale-95"
+              className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white px-3.5 py-1.5 rounded-xl text-xs font-black shadow-sm flex items-center gap-1 transition transform active:scale-95"
             >
-              <Layers className="w-3.5 h-3.5" /> 🎴 単語帳
+              <Layers className="w-3.5 h-3.5" /> 🎴 単語帳モード
             </button>
 
             <div className="flex items-center gap-1 bg-white border border-stone-200 px-3 py-1.5 rounded-xl shadow-sm">
@@ -813,6 +780,65 @@ function HomeView({ folders, questions, onSelectQuestion, onOpenFolderModal, onT
             ))}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// メンバー一覧・管理者追放モーダル
+function MembersModal({ members, currentUid, isAdmin, onClose, onKick, onUnlockAdmin }) {
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="bg-white p-6 rounded-3xl max-w-md w-full shadow-2xl flex flex-col max-h-[85vh]">
+        <div className="flex justify-between items-center border-b pb-3 mb-4">
+          <h3 className="font-extrabold text-xl text-stone-800 flex items-center gap-2">
+            <Users className="w-6 h-6 text-indigo-600" /> グループメンバー ({members.length}人)
+          </h3>
+          {isAdmin && (
+            <span className="bg-purple-100 text-purple-800 text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1">
+              <ShieldCheck className="w-3 h-3"/> 管理者権限
+            </span>
+          )}
+        </div>
+
+        <div className="overflow-y-auto pr-1 space-y-2.5 flex-1">
+          {members.map((m) => (
+            <div key={m.uid} className={`flex items-center justify-between p-3 rounded-2xl border ${m.uid === currentUid ? 'bg-amber-50 border-amber-200' : 'bg-stone-50 border-stone-100'}`}>
+              <div className="flex items-center gap-3">
+                <div className="text-2xl">{m.avatar || '🎓'}</div>
+                <div>
+                  <div className="font-extrabold text-sm text-stone-800 flex items-center gap-1.5">
+                    {m.name}
+                    {m.uid === currentUid && <span className="text-[9px] bg-amber-500 text-white px-1.5 py-0.2 rounded-full font-bold">あなた</span>}
+                  </div>
+                  <div className="text-[11px] font-bold text-amber-600 flex items-center gap-2">
+                    <span>Lv.{m.level || 1}</span>
+                    <span>• {m.xp || 0} XP</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 管理者用キックボタン */}
+              {isAdmin && m.uid !== currentUid && (
+                <button 
+                  onClick={() => onKick(m.uid, m.name)}
+                  className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1 transition active:scale-95"
+                >
+                  <UserX className="w-3.5 h-3.5"/> 追放
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-4 pt-3 border-t flex items-center justify-between gap-2">
+          {!isAdmin ? (
+            <button onClick={onUnlockAdmin} className="text-[10px] font-bold text-stone-400 hover:text-purple-600 underline">
+              🔑 管理者ログイン
+            </button>
+          ) : <span className="text-[10px] font-bold text-purple-600">※ 荒らしは「追放」で削除可能</span>}
+          <button onClick={onClose} className="bg-indigo-600 text-white px-6 py-2 rounded-xl text-xs font-extrabold shadow-md">閉じる</button>
+        </div>
       </div>
     </div>
   );
@@ -966,13 +992,13 @@ function NavButton({ active, icon, label, onClick }) {
   );
 }
 
-function RankingView({ leaderboard, currentUid, onOpenMembers }) {
+function RankingView({ leaderboard, currentUid, isAdmin, onKickUser, onOpenMembers }) {
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl font-extrabold text-stone-700 flex items-center gap-2"><Trophy className="w-6 h-6 text-yellow-500" /> グループ内ランキング</h2>
-        <button onClick={onOpenMembers} className="bg-amber-100 hover:bg-amber-200 text-amber-800 px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1 shadow-xs">
-          <Users className="w-3.5 h-3.5" /> 全員の一覧
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-extrabold text-stone-700 flex items-center gap-2"><Trophy className="w-6 h-6 text-yellow-500" /> グループランキング</h2>
+        <button onClick={onOpenMembers} className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-xs px-3 py-1.5 rounded-full border border-indigo-200 flex items-center gap-1">
+          <Users className="w-3.5 h-3.5"/> メンバー一覧 ({leaderboard.length})
         </button>
       </div>
 
@@ -983,9 +1009,18 @@ function RankingView({ leaderboard, currentUid, onOpenMembers }) {
             <div className="flex items-center gap-3">
               <div className="w-8 font-extrabold text-lg text-center">{index + 1}</div>
               <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-xl shadow-sm">{user.avatar || '🎓'}</div>
-              <div><div className="font-extrabold text-sm">{user.name} {user.uid===currentUid && <span className="text-[10px] bg-amber-500 text-white px-2 rounded-full">あなた</span>}</div><div className="text-xs font-bold text-amber-600">Lv. {user.level || 1}</div></div>
+              <div>
+                <div className="font-extrabold text-sm">{user.name} {user.uid===currentUid && <span className="text-[10px] bg-amber-500 text-white px-2 rounded-full">あなた</span>}</div>
+                <div className="text-xs font-bold text-amber-600">Lv. {user.level || 1}</div>
+              </div>
             </div>
-            <div className="font-extrabold text-sm">{user.xp || 0} XP</div>
+            
+            <div className="flex items-center gap-3">
+              <div className="font-extrabold text-sm">{user.xp || 0} XP</div>
+              {isAdmin && user.uid !== currentUid && (
+                <button onClick={() => onKickUser(user.uid, user.name)} className="bg-rose-100 hover:bg-rose-200 text-rose-700 p-1.5 rounded-lg text-xs font-bold"><UserX className="w-4 h-4"/></button>
+              )}
+            </div>
           </div>
         ))}
       </div>
@@ -1112,7 +1147,7 @@ function ChatView({ userProfile, onMessageSent }) {
 
 function CreateQuestionView({ folders, defaultFolderId, userProfile, onSuccess }) {
   const [folderId, setFolderId] = useState(defaultFolderId);
-  const [subject, setSubject] = useState(SUBJECTS[0]);
+  const [subject, setSubject] = useState(SUBJECTS[1]); // 最初のアクティブな教科（'すべて'以外）
   const [subQuestions, setSubQuestions] = useState([{ question: '', answer: '' }]);
 
   const handleSubmit = async (e) => {
@@ -1132,7 +1167,7 @@ function CreateQuestionView({ folders, defaultFolderId, userProfile, onSuccess }
       <h2 className="text-xl font-extrabold flex items-center gap-2 text-amber-900"><PlusCircle className="w-6 h-6 text-orange-500" /> 問題をつくる <span className="text-[10px] bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full">+50 XP</span></h2>
       <div className="bg-stone-50 p-4 rounded-2xl space-y-4 border border-stone-100">
         <select value={folderId} onChange={e => setFolderId(e.target.value)} className="w-full border-2 border-stone-200 p-2.5 rounded-xl text-sm bg-white font-bold outline-none">{folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select>
-        <select value={subject} onChange={e => setSubject(e.target.value)} className="w-full border-2 border-stone-200 p-2.5 rounded-xl text-sm bg-white font-bold outline-none">{SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}</select>
+        <select value={subject} onChange={e => setSubject(e.target.value)} className="w-full border-2 border-stone-200 p-2.5 rounded-xl text-sm bg-white font-bold outline-none">{SUBJECTS.filter(s=>s!=='すべて').map(s => <option key={s} value={s}>{s}</option>)}</select>
       </div>
       <div className="space-y-3">
         {subQuestions.map((sq, i) => (
@@ -1184,7 +1219,7 @@ function QuestionDetailView({ question, currentUid, onBack, onDelete, onUpdate, 
           <h2 className="text-lg font-extrabold text-amber-900">問題を編集</h2>
         </div>
         <div className="bg-stone-50 p-4 rounded-2xl space-y-4 border border-stone-100">
-          <select value={editSubject} onChange={e => setEditSubject(e.target.value)} className="w-full border-2 border-stone-200 p-2.5 rounded-xl text-sm bg-white font-bold outline-none">{SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}</select>
+          <select value={editSubject} onChange={e => setEditSubject(e.target.value)} className="w-full border-2 border-stone-200 p-2.5 rounded-xl text-sm bg-white font-bold outline-none">{SUBJECTS.filter(s=>s!=='すべて').map(s => <option key={s} value={s}>{s}</option>)}</select>
         </div>
         <div className="space-y-3">
           {editSubQuestions.map((sq, i) => (
