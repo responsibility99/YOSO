@@ -13,7 +13,7 @@ import {
 import './index.css';
 
 // 管理者モード解除用の秘密のパスワード（お好きな文字に変更可能です）
-const ADMIN_PASSWORD = 'admin123';
+const ADMIN_PASSWORD = '管理者ですねん';
 
 const SUBJECTS = [
   '国語1', '国語２a', '国語２ｂ', '歴史', '地理', 
