@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { ArrowLeft, MessageCircle, Send, CheckCircle2, RotateCcw } from 'lucide-react';
+import { ArrowLeft, MessageCircle, Send, CheckCircle2 } from 'lucide-react';
+import { SUBJECTS } from './PvPBattle';
 
 export default function QuestionDetailView({ 
   question, 
@@ -38,7 +39,6 @@ export default function QuestionDetailView({
           </span>
         </div>
 
-        {/* 複数問題のリスト表示 */}
         <div className="space-y-6 py-2">
           {(question.subQuestions || []).map((sub, idx) => (
             <div key={idx} className="space-y-3 border-b border-amber-100 pb-4 last:border-b-0 last:pb-0">
@@ -66,7 +66,6 @@ export default function QuestionDetailView({
         </div>
       </div>
 
-      {/* コメントエリア */}
       <div className="bg-white p-5 rounded-3xl border border-amber-200 space-y-4 shadow-md">
         <h4 className="font-extrabold text-xs text-stone-700 flex items-center gap-2">
           <MessageCircle className="w-4 h-4 text-amber-500" /> コメント
@@ -105,30 +104,50 @@ export default function QuestionDetailView({
   );
 }
 
-// 暗記カード（範囲絞り込み & 覚えた/覚えてない機能付き）
+// 暗記カード View（フォルダ絞り込み ＋ 教科絞り込み機能付き）
 export function FlashcardView({ questions, folders, onBack }) {
   const [selectedFolder, setSelectedFolder] = useState('all');
+  const [selectedSubject, setSelectedSubject] = useState('all');
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
-  const [memorizedIds, setMemorizedIds] = useState([]); // 覚えた問題のIDリスト
+  const [memorizedIds, setMemorizedIds] = useState([]);
 
-  // フォルダ絞り込み
-  const filteredQuestions = selectedFolder === 'all' 
-    ? questions 
-    : questions.filter(q => q.folderId === selectedFolder);
+  // フォルダ ＆ 教科のW絞り込み
+  const filteredQuestions = questions.filter(q => {
+    const matchFolder = selectedFolder === 'all' || q.folderId === selectedFolder;
+    const matchSubject = selectedSubject === 'all' || q.subject === selectedSubject;
+    return matchFolder && matchSubject;
+  });
 
   if (filteredQuestions.length === 0) {
     return (
       <div className="space-y-4 max-w-lg mx-auto w-full">
-        <div className="flex justify-between items-center">
-          <button onClick={onBack} className="text-xs font-bold bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full">戻る</button>
-          <select value={selectedFolder} onChange={e => setSelectedFolder(e.target.value)} className="bg-white border border-amber-200 p-1.5 rounded-xl text-xs font-bold text-stone-800">
-            <option value="all">すべてのフォルダ</option>
-            {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-          </select>
+        <div className="flex flex-col gap-2">
+          <div className="flex justify-between items-center">
+            <button onClick={onBack} className="text-xs font-bold bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full">戻る</button>
+            <span className="text-xs font-black text-stone-500">条件に合うカードがありません</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <select 
+              value={selectedFolder} 
+              onChange={e => { setSelectedFolder(e.target.value); setCurrentIndex(0); setShowAnswer(false); }} 
+              className="bg-white border border-amber-200 p-2 rounded-xl text-xs font-bold text-stone-800 shadow-sm"
+            >
+              <option value="all">すべてのフォルダ</option>
+              {folders.map(f => <option key={f.id} value={f.id}>📁 {f.name}</option>)}
+            </select>
+            <select 
+              value={selectedSubject} 
+              onChange={e => { setSelectedSubject(e.target.value); setCurrentIndex(0); setShowAnswer(false); }} 
+              className="bg-white border border-amber-200 p-2 rounded-xl text-xs font-bold text-stone-800 shadow-sm"
+            >
+              <option value="all">すべての教科</option>
+              {SUBJECTS.map(s => <option key={s} value={s}>📚 {s}</option>)}
+            </select>
+          </div>
         </div>
         <div className="text-center py-12 text-stone-400 font-bold text-xs bg-white rounded-3xl border border-amber-200">
-          該当するカードがありません
+          該当するカードがありません。条件を変えてみてください！
         </div>
       </div>
     );
@@ -148,24 +167,38 @@ export function FlashcardView({ questions, folders, onBack }) {
 
   return (
     <div className="space-y-4 max-w-lg mx-auto w-full">
-      <div className="flex justify-between items-center gap-2">
-        <button onClick={onBack} className="text-xs font-bold bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full">戻る</button>
-        
-        {/* 範囲絞り込みドロップダウン */}
-        <select 
-          value={selectedFolder} 
-          onChange={e => { setSelectedFolder(e.target.value); setCurrentIndex(0); setShowAnswer(false); }} 
-          className="bg-white border border-amber-200 p-1.5 rounded-xl text-xs font-bold text-stone-800 shadow-sm"
-        >
-          <option value="all">すべてのフォルダ ({questions.length})</option>
-          {folders.map(f => (
-            <option key={f.id} value={f.id}>📁 {f.name}</option>
-          ))}
-        </select>
+      <div className="space-y-2">
+        <div className="flex justify-between items-center">
+          <button onClick={onBack} className="text-xs font-bold bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full">戻る</button>
+          <span className="text-xs font-black text-amber-600">
+            🎴 ({((currentIndex % filteredQuestions.length) + 1)} / {filteredQuestions.length})
+          </span>
+        </div>
 
-        <span className="text-xs font-black text-amber-600">
-          🎴 ({((currentIndex % filteredQuestions.length) + 1)} / {filteredQuestions.length})
-        </span>
+        {/* 絞り込みドロップダウン（フォルダ ＆ 教科） */}
+        <div className="grid grid-cols-2 gap-2">
+          <select 
+            value={selectedFolder} 
+            onChange={e => { setSelectedFolder(e.target.value); setCurrentIndex(0); setShowAnswer(false); }} 
+            className="bg-white border border-amber-200 p-2 rounded-xl text-xs font-bold text-stone-800 shadow-sm outline-none focus:border-amber-400"
+          >
+            <option value="all">すべてのフォルダ</option>
+            {folders.map(f => (
+              <option key={f.id} value={f.id}>📁 {f.name}</option>
+            ))}
+          </select>
+
+          <select 
+            value={selectedSubject} 
+            onChange={e => { setSelectedSubject(e.target.value); setCurrentIndex(0); setShowAnswer(false); }} 
+            className="bg-white border border-amber-200 p-2 rounded-xl text-xs font-bold text-stone-800 shadow-sm outline-none focus:border-amber-400"
+          >
+            <option value="all">すべての教科</option>
+            {SUBJECTS.map(s => (
+              <option key={s} value={s}>📚 {s}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* カード本体 */}
