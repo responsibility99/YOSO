@@ -3,7 +3,7 @@ import {
   BookOpen, FolderPlus, ThumbsUp, 
   Home, PlusCircle, ArrowLeft, Trash2, Calendar, Sparkles,
   MessageCircle, Send, Trophy, Medal, Flame, KeyRound, LogOut,
-  ImagePlus, X, HelpCircle, Edit, QrCode, Share2
+  ImagePlus, X, HelpCircle, Edit, QrCode, Share2, Target, PartyPopper
 } from 'lucide-react';
 import { db } from './firebase';
 import { 
@@ -24,6 +24,7 @@ const BADGES = [
   { id: 'c2', icon: '💬', name: 'おしゃべり', desc: 'チャット10回送信', type: 'totalChats', req: 10 },
   { id: 'l1', icon: '🥉', name: 'ルーキー', desc: 'レベル5到達', type: 'level', req: 5 },
   { id: 'l2', icon: '🥈', name: 'チャレンジャー', desc: 'レベル10到達', type: 'level', req: 10 },
+  { id: 'h1', icon: '🎯', name: '神予想屋', desc: '的中した問題がある', type: 'hitCount', req: 1 },
 ];
 
 export default function App() {
@@ -36,7 +37,7 @@ export default function App() {
     const defaultUid = 'user_' + Date.now() + Math.floor(Math.random()*1000);
     return saved ? JSON.parse(saved) : { 
       uid: defaultUid, name: 'テスト対策生', avatar: '🎓', testDate: '',
-      xp: 0, level: 1, totalPosts: 0, totalChats: 0, secretCode: '' 
+      xp: 0, level: 1, totalPosts: 0, totalChats: 0, hitCount: 0, secretCode: '' 
     };
   });
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -51,6 +52,9 @@ export default function App() {
   const [questions, setQuestions] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
 
+  // 全員の画面に通知する「神的中ポップアップ」用の状態
+  const [hitAnnouncement, setHitAnnouncement] = useState(null);
+
   useEffect(() => {
     if (!userProfile.secretCode) return;
     const unsub = onSnapshot(collection(db, 'folders'), (snapshot) => {
@@ -64,7 +68,18 @@ export default function App() {
     if (!userProfile.secretCode) return;
     const unsub = onSnapshot(collection(db, 'questions'), (snapshot) => {
       const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      setQuestions(data.filter(d => d.secretCode === userProfile.secretCode));
+      const groupQuestions = data.filter(d => d.secretCode === userProfile.secretCode);
+      setQuestions(groupQuestions);
+
+      // 直近で「的中」が押された問題をチェックして全員にポップアップ表示
+      const recentlyHit = groupQuestions.find(q => q.lastHitAt && (Date.now() - q.lastHitAt < 10000));
+      if (recentlyHit) {
+        setHitAnnouncement({
+          author: recentlyHit.author,
+          subject: recentlyHit.subject,
+          questionText: recentlyHit.subQuestions?.[0]?.question || '予想問題'
+        });
+      }
     });
     return () => unsub();
   }, [userProfile.secretCode]);
@@ -100,6 +115,26 @@ export default function App() {
       if (statToIncrement) updates[statToIncrement] = (prev[statToIncrement] || 0) + 1;
       return { ...prev, ...updates };
     });
+  };
+
+  const handleToggleHit = async (qId) => {
+    const q = questions.find(item => item.id === qId);
+    if (!q) return;
+
+    const hitBy = q.hitBy || [];
+    const isAlreadyHit = hitBy.includes(userProfile.uid);
+    const newHitBy = isAlreadyHit ? hitBy.filter(id => id !== userProfile.uid) : [...hitBy, userProfile.uid];
+
+    try {
+      await updateDoc(doc(db, 'questions', qId), {
+        hitCount: newHitBy.length,
+        hitBy: newHitBy,
+        lastHitAt: isAlreadyHit ? null : Date.now() // 的中ボタンが押された瞬間のタイムスタンプ
+      });
+
+      // 的中ボタンを押したら投票者にもXPボーナス
+      if (!isAlreadyHit) gainXP(15, null);
+    } catch (err) {}
   };
 
   const getDaysUntilTest = () => {
@@ -150,6 +185,35 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-100 text-stone-800 flex flex-col font-sans pb-24">
+      {/* 全員共通：神的中ポップアップ演出 */}
+      {hitAnnouncement && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-gradient-to-b from-yellow-300 via-orange-400 to-rose-500 p-1 rounded-3xl shadow-2xl max-w-sm w-full text-center animate-bounce">
+            <div className="bg-white p-6 rounded-[22px] space-y-4">
+              <div className="w-16 h-16 bg-yellow-100 rounded-full mx-auto flex items-center justify-center text-yellow-600 shadow-inner">
+                <PartyPopper className="w-10 h-10" />
+              </div>
+              <div className="inline-block bg-rose-100 text-rose-700 text-xs font-black px-3 py-1 rounded-full">
+                🎯 テスト的中報告！
+              </div>
+              <h2 className="text-xl font-black text-stone-800">
+                <span className="text-amber-600">{hitAnnouncement.author}</span> さんの問題が<br/>テストに出ました！🎉
+              </h2>
+              <div className="bg-amber-50 p-3 rounded-2xl text-xs font-bold text-stone-600 border border-amber-200">
+                【{hitAnnouncement.subject}】<br/>
+                「{hitAnnouncement.questionText}」
+              </div>
+              <button 
+                onClick={() => setHitAnnouncement(null)} 
+                className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-white py-3 rounded-xl font-extrabold shadow-lg"
+              >
+                神予想すぎる！👏
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showLevelUp && (
         <div className="fixed top-20 left-0 right-0 z-50 flex justify-center animate-bounce">
           <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-6 py-3 rounded-full shadow-2xl font-extrabold text-lg flex items-center gap-2 border-4 border-white">
@@ -204,6 +268,7 @@ export default function App() {
             onBack={() => setSelectedQuestionId(null)}
             onDelete={async (qId) => { if(window.confirm('削除しますか？')) { await deleteDoc(doc(db, 'questions', qId)); setSelectedQuestionId(null); } }}
             onUpdate={async (qId, updatedData) => { await updateDoc(doc(db, 'questions', qId), updatedData); }}
+            onToggleHit={handleToggleHit}
             onAddComment={async (qId, text) => {
               const q = questions.find(item => item.id === qId);
               await updateDoc(doc(db, 'questions', qId), { comments: [...(q.comments || []), { id: 'c_' + Date.now(), user: userProfile.name, text }] });
@@ -227,7 +292,7 @@ export default function App() {
         <NavButton active={activeTab === 'ranking'} icon={<Trophy className="w-6 h-6" />} label="ランキング" onClick={() => { setActiveTab('ranking'); setSelectedQuestionId(null); }} />
       </nav>
 
-      {/* QRコード招待モーダル (API画像方式) */}
+      {/* QRコード招待モーダル */}
       {showQrModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white p-6 rounded-3xl max-w-sm w-full shadow-2xl flex flex-col items-center text-center space-y-4">
@@ -271,19 +336,15 @@ export default function App() {
             <div className="overflow-y-auto pr-2 space-y-4 flex-1 text-sm font-bold text-stone-700">
               <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100">
                 <h4 className="text-amber-800 font-extrabold mb-1">🔑 グループ（合言葉）</h4>
-                <p className="text-xs">同じ合言葉を入力した人同士で、問題やチャットが共有されます。画面右上のQRボタンから簡単に招待できます。</p>
+                <p className="text-xs">同じ合言葉を入力した人同士で問題やチャットが共有されます。右上のQRコードから友達を呼び込もう！</p>
+              </div>
+              <div className="bg-rose-50 p-4 rounded-2xl border border-rose-100">
+                <h4 className="text-rose-800 font-extrabold mb-1">🎯 テスト的中（神予想！）</h4>
+                <p className="text-xs">テスト後に実際に問題が出たら詳細画面の「🎯 出た！」を押そう！押すと投稿者が全員の画面で祝福されます。</p>
               </div>
               <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100">
                 <h4 className="text-orange-800 font-extrabold mb-1">✍️ 問題の投稿・解答・編集</h4>
-                <p className="text-xs">「投稿」タブから予想問題を作れます。投稿した問題は詳細画面の右上のボタンから編集や削除が可能です。</p>
-              </div>
-              <div className="bg-yellow-50 p-4 rounded-2xl border border-yellow-100">
-                <h4 className="text-yellow-800 font-extrabold mb-1">🏆 XPとレベル・バッジ</h4>
-                <p className="text-xs">問題を投稿・コメントするとXP（経験値）が貯まりレベルアップ！条件を満たすとバッジも貰えます。</p>
-              </div>
-              <div className="bg-stone-50 p-4 rounded-2xl border border-stone-200">
-                <h4 className="text-stone-800 font-extrabold mb-1">💬 チャット機能</h4>
-                <p className="text-xs">画像の送信や、自分が送ったメッセージの取り消し（ゴミ箱アイコン）が可能です。</p>
+                <p className="text-xs">「投稿」タブから問題を作成できます。投稿後は詳細画面からいつでも編集・削除が可能です。</p>
               </div>
             </div>
             <div className="mt-4 pt-3 border-t">
@@ -502,7 +563,7 @@ function CreateQuestionView({ folders, defaultFolderId, userProfile, onSuccess }
     try {
       await addDoc(collection(db, 'questions'), {
         folderId, subject, author: userProfile.name, avatar: userProfile.avatar, uid: userProfile.uid, secretCode: userProfile.secretCode,
-        likes: 0, likedByMe: false, subQuestions, comments: [], createdAt: new Date().toLocaleDateString('ja-JP')
+        likes: 0, likedByMe: false, hitCount: 0, hitBy: [], subQuestions, comments: [], createdAt: new Date().toLocaleDateString('ja-JP')
       });
       onSuccess();
     } catch (err) { alert('投稿失敗'); }
@@ -530,7 +591,7 @@ function CreateQuestionView({ folders, defaultFolderId, userProfile, onSuccess }
   );
 }
 
-function QuestionDetailView({ question, currentUid, onBack, onDelete, onUpdate, onAddComment }) {
+function QuestionDetailView({ question, currentUid, onBack, onDelete, onUpdate, onToggleHit, onAddComment }) {
   const [commentText, setCommentText] = useState('');
   const [showAnswers, setShowAnswers] = useState({});
   const [isEditing, setIsEditing] = useState(false);
@@ -546,6 +607,8 @@ function QuestionDetailView({ question, currentUid, onBack, onDelete, onUpdate, 
   }, [question, isEditing]);
 
   if (!question) return null;
+
+  const isHitByMe = (question.hitBy || []).includes(currentUid);
 
   const handleSaveEdit = () => {
     onUpdate(question.id, {
@@ -594,7 +657,18 @@ function QuestionDetailView({ question, currentUid, onBack, onDelete, onUpdate, 
       </div>
       <div className="bg-white p-6 rounded-3xl border shadow-xl space-y-4 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-amber-300 to-rose-300"></div>
-        <div className="inline-block px-3 py-1 bg-amber-100 text-amber-800 text-xs font-extrabold rounded-lg">{question.subject}</div>
+        <div className="flex justify-between items-center">
+          <div className="inline-block px-3 py-1 bg-amber-100 text-amber-800 text-xs font-extrabold rounded-lg">{question.subject}</div>
+          
+          {/* テスト的中ボタン */}
+          <button 
+            onClick={() => onToggleHit(question.id)} 
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black shadow-md transition transform hover:scale-105 ${isHitByMe ? 'bg-gradient-to-r from-rose-500 to-orange-500 text-white' : 'bg-stone-100 text-stone-600 hover:bg-amber-100'}`}
+          >
+            <Target className="w-4 h-4" /> 🎯 テストに出た！ ({question.hitCount || 0})
+          </button>
+        </div>
+
         <div className="space-y-3 pt-4">
           {(question.subQuestions || []).map((sq, i) => (
             <div key={i} className="p-4 bg-stone-50 border rounded-2xl shadow-sm">
@@ -609,6 +683,7 @@ function QuestionDetailView({ question, currentUid, onBack, onDelete, onUpdate, 
           ))}
         </div>
       </div>
+
       <div className="bg-white p-6 rounded-3xl border shadow-lg space-y-4">
         <h3 className="font-extrabold text-base text-stone-700">💬 コメント</h3>
         <div className="flex gap-2">
@@ -662,7 +737,12 @@ function HomeView({ folders, questions, onSelectQuestion, onOpenFolderModal, onT
         ) : (
           <div className="space-y-4">
             {displayQuestions.map(q => (
-              <div key={q.id} onClick={() => onSelectQuestion(q.id)} className="bg-white p-5 rounded-3xl border shadow-md cursor-pointer">
+              <div key={q.id} onClick={() => onSelectQuestion(q.id)} className="bg-white p-5 rounded-3xl border shadow-md cursor-pointer relative overflow-hidden">
+                {q.hitCount > 0 && (
+                  <div className="absolute top-0 right-0 bg-gradient-to-l from-rose-500 to-orange-500 text-white text-[10px] font-black px-3 py-1 rounded-bl-xl shadow-sm flex items-center gap-1">
+                    <Target className="w-3 h-3"/> 🎯 的中 {q.hitCount}人
+                  </div>
+                )}
                 <span className="text-[10px] font-extrabold bg-amber-100 text-amber-800 px-2.5 py-1 rounded-md">{q.subject}</span>
                 <h3 className="font-extrabold text-lg text-stone-800 mt-2 truncate">{q.subQuestions?.[0]?.question || '無題の問題'}</h3>
                 <div className="flex justify-between items-center text-xs border-t pt-3 mt-3">
