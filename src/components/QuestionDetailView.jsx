@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, MessageCircle, Send } from 'lucide-react';
-import { SUBJECT_ELEMENTS } from './PvPBattle';
+import { ArrowLeft, MessageCircle, Send, CheckCircle2, RotateCcw } from 'lucide-react';
 
 export default function QuestionDetailView({ 
   question, 
@@ -12,8 +11,6 @@ export default function QuestionDetailView({
   const [commentText, setCommentText] = useState('');
 
   if (!question) return null;
-
-  const elemInfo = SUBJECT_ELEMENTS[question.subject] || { name: '✨ 光属性', color: 'bg-amber-400 text-stone-900' };
 
   const handleCommentSubmit = (e) => {
     e.preventDefault();
@@ -33,28 +30,35 @@ export default function QuestionDetailView({
 
       <div className="bg-white p-6 rounded-3xl border border-amber-200 space-y-5 shadow-lg">
         <div className="flex justify-between items-center">
-          <span className={`text-[10px] font-black px-3 py-1 rounded-full ${elemInfo.color}`}>
-            {elemInfo.name} | {question.subject}
+          <span className="bg-amber-100 text-amber-800 font-black text-[10px] px-3 py-1 rounded-full">
+            {question.subject}
           </span>
           <span className="text-xs font-bold text-stone-400">
             作成者: {question.author || '匿名'}
           </span>
         </div>
 
-        <div className="space-y-4 py-2">
-          <h3 className="text-base font-black text-stone-800 leading-relaxed">
-            Q. {question.subQuestions?.[0]?.question || '問題文がありません'}
-          </h3>
+        {/* 複数問題のリスト表示 */}
+        <div className="space-y-6 py-2">
+          {(question.subQuestions || []).map((sub, idx) => (
+            <div key={idx} className="space-y-3 border-b border-amber-100 pb-4 last:border-b-0 last:pb-0">
+              <h3 className="text-sm font-black text-stone-800 leading-relaxed">
+                Q{idx + 1}. {sub.question}
+              </h3>
 
-          {showAnswer ? (
-            <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl text-stone-800 font-bold text-sm space-y-1">
-              <div className="text-[10px] text-amber-600 font-bold">正解・解説</div>
-              <div>{question.subQuestions?.[0]?.answer || '解答がありません'}</div>
+              {showAnswer ? (
+                <div className="bg-amber-50 border border-amber-200 p-3.5 rounded-2xl text-stone-800 font-bold text-xs space-y-1">
+                  <div className="text-[10px] text-amber-600 font-bold">解答・解説</div>
+                  <div>{sub.answer || '解答がありません'}</div>
+                </div>
+              ) : null}
             </div>
-          ) : (
+          ))}
+
+          {!showAnswer && (
             <button 
               onClick={() => setShowAnswer(true)} 
-              className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white py-3.5 rounded-2xl font-black text-sm shadow-md transition"
+              className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white py-3.5 rounded-2xl font-black text-xs shadow-md transition"
             >
               正解・解説を表示する
             </button>
@@ -62,6 +66,7 @@ export default function QuestionDetailView({
         </div>
       </div>
 
+      {/* コメントエリア */}
       <div className="bg-white p-5 rounded-3xl border border-amber-200 space-y-4 shadow-md">
         <h4 className="font-extrabold text-xs text-stone-700 flex items-center gap-2">
           <MessageCircle className="w-4 h-4 text-amber-500" /> コメント
@@ -100,54 +105,107 @@ export default function QuestionDetailView({
   );
 }
 
-export function FlashcardView({ questions, onBack }) {
+// 暗記カード（範囲絞り込み & 覚えた/覚えてない機能付き）
+export function FlashcardView({ questions, folders, onBack }) {
+  const [selectedFolder, setSelectedFolder] = useState('all');
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
+  const [memorizedIds, setMemorizedIds] = useState([]); // 覚えた問題のIDリスト
 
-  if (questions.length === 0) {
+  // フォルダ絞り込み
+  const filteredQuestions = selectedFolder === 'all' 
+    ? questions 
+    : questions.filter(q => q.folderId === selectedFolder);
+
+  if (filteredQuestions.length === 0) {
     return (
-      <div className="text-center py-12 text-stone-400 font-bold text-xs bg-white rounded-3xl border border-amber-200">
-        カードがありません
+      <div className="space-y-4 max-w-lg mx-auto w-full">
+        <div className="flex justify-between items-center">
+          <button onClick={onBack} className="text-xs font-bold bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full">戻る</button>
+          <select value={selectedFolder} onChange={e => setSelectedFolder(e.target.value)} className="bg-white border border-amber-200 p-1.5 rounded-xl text-xs font-bold text-stone-800">
+            <option value="all">すべてのフォルダ</option>
+            {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+          </select>
+        </div>
+        <div className="text-center py-12 text-stone-400 font-bold text-xs bg-white rounded-3xl border border-amber-200">
+          該当するカードがありません
+        </div>
       </div>
     );
   }
 
-  const currentQ = questions[currentIndex];
+  const currentQ = filteredQuestions[currentIndex % filteredQuestions.length];
+  const isMemorized = memorizedIds.includes(currentQ.id);
+
+  const toggleMemorized = (e) => {
+    e.stopPropagation();
+    setMemorizedIds(prev => 
+      prev.includes(currentQ.id) 
+        ? prev.filter(id => id !== currentQ.id) 
+        : [...prev, currentQ.id]
+    );
+  };
 
   return (
     <div className="space-y-4 max-w-lg mx-auto w-full">
-      <div className="flex justify-between items-center">
-        <button 
-          onClick={onBack} 
-          className="text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200 px-3 py-1.5 rounded-full"
+      <div className="flex justify-between items-center gap-2">
+        <button onClick={onBack} className="text-xs font-bold bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full">戻る</button>
+        
+        {/* 範囲絞り込みドロップダウン */}
+        <select 
+          value={selectedFolder} 
+          onChange={e => { setSelectedFolder(e.target.value); setCurrentIndex(0); setShowAnswer(false); }} 
+          className="bg-white border border-amber-200 p-1.5 rounded-xl text-xs font-bold text-stone-800 shadow-sm"
         >
-          戻る
-        </button>
+          <option value="all">すべてのフォルダ ({questions.length})</option>
+          {folders.map(f => (
+            <option key={f.id} value={f.id}>📁 {f.name}</option>
+          ))}
+        </select>
+
         <span className="text-xs font-black text-amber-600">
-          🎴 暗記カード ({currentIndex + 1} / {questions.length})
+          🎴 ({((currentIndex % filteredQuestions.length) + 1)} / {filteredQuestions.length})
         </span>
       </div>
 
+      {/* カード本体 */}
       <div 
         onClick={() => setShowAnswer(!showAnswer)} 
-        className="bg-white min-h-[240px] p-6 rounded-3xl border border-amber-200 flex flex-col justify-between text-center cursor-pointer shadow-lg transition transform active:scale-98"
+        className={`bg-white min-h-[250px] p-6 rounded-3xl border-2 flex flex-col justify-between text-center cursor-pointer shadow-lg transition ${
+          isMemorized ? 'border-emerald-400 bg-emerald-50/20' : 'border-amber-200'
+        }`}
       >
-        <span className="text-[10px] font-black text-amber-600">{currentQ.subject}</span>
-        <div className="text-base font-black text-stone-800 px-2 leading-relaxed">
-          {showAnswer ? (currentQ.subQuestions?.[0]?.answer || '解答なし') : (currentQ.subQuestions?.[0]?.question || '問題なし')}
+        <div className="flex justify-between items-center">
+          <span className="text-[10px] font-black bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full">{currentQ.subject}</span>
+          <button 
+            onClick={toggleMemorized}
+            className={`px-2.5 py-1 rounded-xl text-[10px] font-black flex items-center gap-1 ${
+              isMemorized ? 'bg-emerald-500 text-white' : 'bg-stone-100 text-stone-500 hover:bg-emerald-100 hover:text-emerald-700'
+            }`}
+          >
+            <CheckCircle2 className="w-3.5 h-3.5"/> {isMemorized ? '覚えた！' : 'まだ'}
+          </button>
         </div>
+
+        <div className="text-base font-black text-stone-800 px-2 leading-relaxed">
+          {showAnswer 
+            ? (currentQ.subQuestions?.[0]?.answer || '解答なし') 
+            : (currentQ.subQuestions?.[0]?.question || '問題なし')
+          }
+        </div>
+
         <span className="text-[10px] font-bold text-stone-400">タップして裏返す</span>
       </div>
 
       <div className="flex gap-2">
         <button 
-          onClick={() => { setShowAnswer(false); setCurrentIndex((currentIndex - 1 + questions.length) % questions.length); }} 
+          onClick={() => { setShowAnswer(false); setCurrentIndex((currentIndex - 1 + filteredQuestions.length) % filteredQuestions.length); }} 
           className="flex-1 bg-white hover:bg-amber-50 text-stone-700 py-3 rounded-2xl text-xs font-bold border border-amber-200 shadow-sm"
         >
           ◀ 前へ
         </button>
         <button 
-          onClick={() => { setShowAnswer(false); setCurrentIndex((currentIndex + 1) % questions.length); }} 
+          onClick={() => { setShowAnswer(false); setCurrentIndex((currentIndex + 1) % filteredQuestions.length); }} 
           className="flex-1 bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-2xl text-xs font-black shadow-md"
         >
           次へ ▶
