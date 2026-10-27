@@ -3,7 +3,8 @@ import {
   BookOpen, FolderPlus, ThumbsUp, 
   Home, PlusCircle, ArrowLeft, Trash2, Calendar, Sparkles,
   MessageCircle, Send, Trophy, Medal, Flame, KeyRound, LogOut,
-  ImagePlus, X, HelpCircle, Edit, QrCode, Share2, Target, PartyPopper
+  ImagePlus, X, HelpCircle, Edit, QrCode, Share2, Target, PartyPopper,
+  ArrowUpDown, History, Rocket
 } from 'lucide-react';
 import { db } from './firebase';
 import { 
@@ -27,6 +28,14 @@ const BADGES = [
   { id: 'h1', icon: '🎯', name: '神予想屋', desc: '的中した問題がある', type: 'hitCount', req: 1 },
 ];
 
+// アプリのアップデート履歴データ
+const APP_HISTORY = [
+  { version: 'v3.0', date: '2025/02', title: '🎯 テスト的中報告＆ソート機能', desc: 'テストで出た問題を報告する「神予想システム」と問題の並び替え・アップデート歴史画面を追加！' },
+  { version: 'v2.5', date: '2025/02', title: '📷 チャット画像送信＆QR招待', desc: '合言葉共有用のQRコード表示と、チャットでの画像添付機能に対応。' },
+  { version: 'v2.0', date: '2025/02', title: '🏆 予想屋XP＆レベル機能', desc: '投稿やチャットでXPを獲得してレベルアップするゲーム要素を導入。' },
+  { version: 'v1.0', date: '2025/01', title: '🚀 YOSO アプリ誕生！', desc: '合言葉でつながる予想問題共有アプリとしてスタート。' },
+];
+
 export default function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [selectedFolderId, setSelectedFolderId] = useState(null);
@@ -43,6 +52,7 @@ export default function App() {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showLevelUp, setShowLevelUp] = useState(false);
   const [tempCode, setTempCode] = useState('');
 
@@ -52,7 +62,6 @@ export default function App() {
   const [questions, setQuestions] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
 
-  // 全員の画面に通知する「神的中ポップアップ」用の状態
   const [hitAnnouncement, setHitAnnouncement] = useState(null);
 
   useEffect(() => {
@@ -71,7 +80,6 @@ export default function App() {
       const groupQuestions = data.filter(d => d.secretCode === userProfile.secretCode);
       setQuestions(groupQuestions);
 
-      // 直近で「的中」が押された問題をチェックして全員にポップアップ表示
       const recentlyHit = groupQuestions.find(q => q.lastHitAt && (Date.now() - q.lastHitAt < 10000));
       if (recentlyHit) {
         setHitAnnouncement({
@@ -129,10 +137,9 @@ export default function App() {
       await updateDoc(doc(db, 'questions', qId), {
         hitCount: newHitBy.length,
         hitBy: newHitBy,
-        lastHitAt: isAlreadyHit ? null : Date.now() // 的中ボタンが押された瞬間のタイムスタンプ
+        lastHitAt: isAlreadyHit ? null : Date.now()
       });
 
-      // 的中ボタンを押したら投票者にもXPボーナス
       if (!isAlreadyHit) gainXP(15, null);
     } catch (err) {}
   };
@@ -232,6 +239,9 @@ export default function App() {
           <button onClick={() => setShowQrModal(true)} className="bg-white/90 hover:bg-white text-orange-600 p-2 rounded-full shadow-md transition transform hover:scale-105">
             <QrCode className="w-5 h-5" />
           </button>
+          <button onClick={() => setShowHistoryModal(true)} className="bg-white/90 hover:bg-white text-purple-600 p-2 rounded-full shadow-md transition transform hover:scale-105" title="アプリの歴史">
+            <History className="w-5 h-5" />
+          </button>
           <button onClick={() => setShowHelpModal(true)} className="bg-white/90 hover:bg-white text-amber-600 p-2 rounded-full shadow-md transition transform hover:scale-105">
             <HelpCircle className="w-5 h-5" />
           </button>
@@ -291,6 +301,33 @@ export default function App() {
         <NavButton active={activeTab === 'chat'} icon={<MessageCircle className="w-6 h-6" />} label="チャット" onClick={() => { setActiveTab('chat'); setSelectedQuestionId(null); }} />
         <NavButton active={activeTab === 'ranking'} icon={<Trophy className="w-6 h-6" />} label="ランキング" onClick={() => { setActiveTab('ranking'); setSelectedQuestionId(null); }} />
       </nav>
+
+      {/* アプリの歴史モーダル */}
+      {showHistoryModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white p-6 rounded-3xl max-w-sm w-full shadow-2xl flex flex-col max-h-[85vh]">
+            <h3 className="font-extrabold text-xl text-center text-purple-900 border-b pb-3 mb-4 flex items-center justify-center gap-2">
+              <History className="w-6 h-6 text-purple-600" /> アプリの歴史
+            </h3>
+            <div className="overflow-y-auto pr-2 space-y-4 flex-1">
+              {APP_HISTORY.map((item, index) => (
+                <div key={index} className="relative pl-6 border-l-2 border-purple-200 pb-2">
+                  <div className="absolute -left-2 top-0 w-3.5 h-3.5 bg-purple-500 rounded-full border-2 border-white"></div>
+                  <div className="flex items-center justify-between text-xs font-black text-purple-600 mb-1">
+                    <span>{item.version}</span>
+                    <span className="text-stone-400 font-bold">{item.date}</span>
+                  </div>
+                  <h4 className="font-extrabold text-sm text-stone-800 mb-1">{item.title}</h4>
+                  <p className="text-xs text-stone-500 font-bold">{item.desc}</p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 pt-3 border-t">
+              <button onClick={() => setShowHistoryModal(false)} className="w-full bg-purple-600 text-white py-3 rounded-xl text-sm font-extrabold shadow-lg">閉じる</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* QRコード招待モーダル */}
       {showQrModal && (
@@ -660,7 +697,6 @@ function QuestionDetailView({ question, currentUid, onBack, onDelete, onUpdate, 
         <div className="flex justify-between items-center">
           <div className="inline-block px-3 py-1 bg-amber-100 text-amber-800 text-xs font-extrabold rounded-lg">{question.subject}</div>
           
-          {/* テスト的中ボタン */}
           <button 
             onClick={() => onToggleHit(question.id)} 
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black shadow-md transition transform hover:scale-105 ${isHitByMe ? 'bg-gradient-to-r from-rose-500 to-orange-500 text-white' : 'bg-stone-100 text-stone-600 hover:bg-amber-100'}`}
@@ -699,8 +735,18 @@ function QuestionDetailView({ question, currentUid, onBack, onDelete, onUpdate, 
 }
 
 function HomeView({ folders, questions, onSelectQuestion, onOpenFolderModal, onToggleLike, secretCode, selectedFolderId, onSelectFolder, onOpenQr }) {
-  const displayQuestions = selectedFolderId ? questions.filter(q => q.folderId === selectedFolderId) : questions;
+  const [sortBy, setSortBy] = useState('newest');
+
+  let rawQuestions = selectedFolderId ? questions.filter(q => q.folderId === selectedFolderId) : questions;
   const selectedFolder = folders.find(f => f.id === selectedFolderId);
+
+  // 並び替えロジック
+  const displayQuestions = [...rawQuestions].sort((a, b) => {
+    if (sortBy === 'hit') return (b.hitCount || 0) - (a.hitCount || 0);
+    if (sortBy === 'likes') return (b.likes || 0) - (a.likes || 0);
+    if (sortBy === 'comments') return (b.comments?.length || 0) - (a.comments?.length || 0);
+    return 0; // デフォルト（新着順）
+  });
 
   return (
     <div className="space-y-8">
@@ -731,7 +777,21 @@ function HomeView({ folders, questions, onSelectQuestion, onOpenFolderModal, onT
       )}
 
       <div>
-        <h2 className="text-lg font-extrabold text-stone-700 mb-4 flex items-center gap-2"><Sparkles className="w-5 h-5 text-orange-400" /> {selectedFolderId ? 'フォルダ内の問題' : 'すべての予想問題'}</h2>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-extrabold text-stone-700 flex items-center gap-2"><Sparkles className="w-5 h-5 text-orange-400" /> {selectedFolderId ? 'フォルダ内の問題' : 'すべての予想問題'}</h2>
+          
+          {/* 並び替えセレクトボックス */}
+          <div className="flex items-center gap-1 bg-white border border-stone-200 px-3 py-1.5 rounded-xl shadow-sm">
+            <ArrowUpDown className="w-3.5 h-3.5 text-stone-400" />
+            <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="text-xs font-extrabold text-stone-700 bg-transparent outline-none cursor-pointer">
+              <option value="newest">新着順</option>
+              <option value="hit">🎯 的中順</option>
+              <option value="likes">👍 いいね順</option>
+              <option value="comments">💬 コメント順</option>
+            </select>
+          </div>
+        </div>
+
         {displayQuestions.length === 0 ? (
           <div className="text-center py-8 text-stone-400 font-bold text-sm bg-white rounded-3xl border border-dashed">問題がありません</div>
         ) : (
@@ -747,7 +807,10 @@ function HomeView({ folders, questions, onSelectQuestion, onOpenFolderModal, onT
                 <h3 className="font-extrabold text-lg text-stone-800 mt-2 truncate">{q.subQuestions?.[0]?.question || '無題の問題'}</h3>
                 <div className="flex justify-between items-center text-xs border-t pt-3 mt-3">
                   <span className="font-bold text-stone-400">作成: {q.author}</span>
-                  <button onClick={(e) => { e.stopPropagation(); onToggleLike(q.id); }} className={`flex items-center gap-1.5 font-extrabold px-3 py-1.5 rounded-full ${q.likedByMe ? 'bg-rose-100 text-rose-600' : 'bg-stone-50 text-stone-500'}`}><ThumbsUp className="w-4 h-4" /> {q.likes || 0}</button>
+                  <div className="flex items-center gap-3">
+                    <span className="text-stone-400 font-bold flex items-center gap-1"><MessageCircle className="w-3.5 h-3.5"/> {q.comments?.length || 0}</span>
+                    <button onClick={(e) => { e.stopPropagation(); onToggleLike(q.id); }} className={`flex items-center gap-1.5 font-extrabold px-3 py-1.5 rounded-full ${q.likedByMe ? 'bg-rose-100 text-rose-600' : 'bg-stone-50 text-stone-500'}`}><ThumbsUp className="w-4 h-4" /> {q.likes || 0}</button>
+                  </div>
                 </div>
               </div>
             ))}
