@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Swords, Check, X, Clock, Zap, Trophy, ShieldAlert } from 'lucide-react';
+import { Swords, Check, X, Clock, Zap, Trophy, Filter, Folder, BookOpen } from 'lucide-react';
 import { db } from '../firebase';
 import { doc, updateDoc, onSnapshot, setDoc } from 'firebase/firestore';
 
@@ -21,14 +21,18 @@ export const SUBJECT_ELEMENTS = {
 
 export const SUBJECTS = Object.keys(SUBJECT_ELEMENTS);
 
-export default function PvPBattle({ leaderboard, currentUid, questions, userProfile, gainXP }) {
+export default function PvPBattle({ leaderboard, currentUid, questions, userProfile, folders = [], gainXP }) {
   const [battleState, setBattleState] = useState(null);
   const [waitingTarget, setWaitingTarget] = useState(null);
+
+  // 出題範囲設定（ホスト用）
+  const [selectedFolderId, setSelectedFolderId] = useState('all');
+  const [selectedSubject, setSelectedSubject] = useState('all');
 
   // ゲーム内ステート
   const [currentQIndex, setCurrentQIndex] = useState(0);
   const [inputAnswer, setInputAnswer] = useState('');
-  const [timeLeft, setTimeLeft] = useState(10); // 1問あたりの制限時間（秒）
+  const [timeLeft, setTimeLeft] = useState(10);
   const [lastDamageText, setLastDamageText] = useState('');
 
   // リアルタイム対戦監視
@@ -45,6 +49,13 @@ export default function PvPBattle({ leaderboard, currentUid, questions, userProf
     return () => unsub();
   }, [userProfile.uid]);
 
+  // 出題範囲でフィルタリングされた問題リスト
+  const activeQuestions = questions.filter(q => {
+    const matchFolder = !battleState?.targetFolderId || battleState.targetFolderId === 'all' || q.folderId === battleState.targetFolderId;
+    const matchSubject = !battleState?.targetSubject || battleState.targetSubject === 'all' || q.subject === battleState.targetSubject;
+    return matchFolder && matchSubject;
+  });
+
   // バトル中のタイマー処理
   useEffect(() => {
     if (battleState?.status !== 'playing') return;
@@ -52,7 +63,6 @@ export default function PvPBattle({ leaderboard, currentUid, questions, userProf
     const timer = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) {
-          // タイムオーバーで次の問題へ
           nextQuestion();
           return 10;
         }
@@ -61,12 +71,15 @@ export default function PvPBattle({ leaderboard, currentUid, questions, userProf
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [battleState?.status, currentQIndex]);
+  }, [battleState?.status, currentQIndex, activeQuestions.length]);
 
-  // 対戦を申し込む
+  // 対戦を申し込む（範囲設定を含めて送信）
   const handleInvite = async (targetUser) => {
     const newBattleId = `battle_${Date.now()}`;
     setWaitingTarget(targetUser);
+
+    const folderObj = folders.find(f => f.id === selectedFolderId);
+    const rangeName = `${folderObj ? '📁 ' + folderObj.name : 'すべてのフォルダ'} / ${selectedSubject !== 'all' ? '📚 ' + selectedSubject : 'すべての教科'}`;
 
     const initBattleData = {
       battleId: newBattleId,
@@ -77,6 +90,9 @@ export default function PvPBattle({ leaderboard, currentUid, questions, userProf
       guestUid: targetUser.uid,
       guestName: targetUser.name,
       guestHp: 1000,
+      targetFolderId: selectedFolderId,
+      targetSubject: selectedSubject,
+      rangeName: rangeName
     };
 
     await setDoc(doc(db, 'pvp_battles', userProfile.uid), { ...initBattleData, role: 'host', opponentUid: targetUser.uid, opponentName: targetUser.name });
@@ -99,29 +115,28 @@ export default function PvPBattle({ leaderboard, currentUid, questions, userProf
     setWaitingTarget(null);
   };
 
-  // 次の問題へスキップ
+  // 次の問題へ
   const nextQuestion = () => {
     setInputAnswer('');
     setTimeLeft(10);
-    setCurrentQIndex(prev => (prev + 1) % (questions.length || 1));
+    const total = activeQuestions.length || 1;
+    setCurrentQIndex(prev => (prev + 1) % total);
   };
 
   // 回答チェック & 攻撃ロジック
   const handleAnswerSubmit = async (e) => {
     e.preventDefault();
-    if (!questions || questions.length === 0) return;
+    if (activeQuestions.length === 0) return;
 
-    const activeQ = questions[currentQIndex % questions.length];
+    const activeQ = activeQuestions[currentQIndex % activeQuestions.length];
     const correctAnswer = activeQ?.subQuestions?.[0]?.answer || '';
 
     if (inputAnswer.trim() === correctAnswer.trim()) {
-      // 素早さボーナスダメージ計算（早く答えるほど大ダメージ）
       const speedBonus = timeLeft * 25;
       const totalDamage = 150 + speedBonus;
 
-      setLastDamageText(`⚡ FAST! ${totalDamage} ダメージを与えた！`);
+      setLastDamageText(`⚡ FAST! ${totalDamage} ダメージ！`);
 
-      // 相手のHPを減らす
       const isHost = battleState.role === 'host';
       const targetHpKey = isHost ? 'guestHp' : 'hostHp';
       const currentOpponentHp = isHost ? (battleState.guestHp ?? 1000) : (battleState.hostHp ?? 1000);
@@ -132,7 +147,7 @@ export default function PvPBattle({ leaderboard, currentUid, questions, userProf
       if (newOpponentHp <= 0) {
         updateObj.status = 'finished';
         updateObj.winner = userProfile.name;
-        gainXP(100, null); // 勝利報酬
+        gainXP(100, null);
       }
 
       await updateDoc(doc(db, 'pvp_battles', userProfile.uid), updateObj);
@@ -147,7 +162,7 @@ export default function PvPBattle({ leaderboard, currentUid, questions, userProf
     nextQuestion();
   };
 
-  const currentQ = questions?.[currentQIndex % (questions?.length || 1)];
+  const currentQ = activeQuestions[currentQIndex % (activeQuestions.length || 1)];
   const myHp = battleState?.role === 'host' ? battleState?.hostHp : battleState?.guestHp;
   const opponentHp = battleState?.role === 'host' ? battleState?.guestHp : battleState?.hostHp;
 
@@ -158,11 +173,73 @@ export default function PvPBattle({ leaderboard, currentUid, questions, userProf
         <h3 className="font-black text-base text-stone-800">1対1 リアルタイム対戦</h3>
       </div>
 
-      {/* リクエスト受信画面 */}
+      {/* ロビー画面（出題範囲の事前選択） */}
+      {(!battleState || !battleState.status) && (
+        <div className="space-y-4">
+          <div className="bg-amber-50/60 p-3.5 rounded-2xl border border-amber-200 space-y-2">
+            <div className="flex items-center gap-1.5 font-extrabold text-xs text-amber-800">
+              <Filter className="w-4 h-4 text-amber-500" /> 出題範囲を設定して対戦
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <select 
+                value={selectedFolderId} 
+                onChange={e => setSelectedFolderId(e.target.value)} 
+                className="bg-white border border-amber-200 p-2 rounded-xl text-xs font-bold text-stone-800 outline-none focus:border-amber-400 shadow-sm"
+              >
+                <option value="all">すべてのフォルダ</option>
+                {folders.map(f => (
+                  <option key={f.id} value={f.id}>📁 {f.name}</option>
+                ))}
+              </select>
+
+              <select 
+                value={selectedSubject} 
+                onChange={e => setSelectedSubject(e.target.value)} 
+                className="bg-white border border-amber-200 p-2 rounded-xl text-xs font-bold text-stone-800 outline-none focus:border-amber-400 shadow-sm"
+              >
+                <option value="all">すべての教科</option>
+                {SUBJECTS.map(s => (
+                  <option key={s} value={s}>📚 {s}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+            <div className="text-[11px] font-extrabold text-stone-500 px-1">対戦相手を選択:</div>
+            {leaderboard.filter(u => u.uid !== currentUid).length === 0 ? (
+              <div className="text-center py-6 text-stone-400 font-bold text-xs">他に部屋に参加しているメンバーがいません</div>
+            ) : (
+              leaderboard.filter(u => u.uid !== currentUid).map(u => (
+                <div key={u.uid} className="bg-amber-50/50 p-3 rounded-2xl flex items-center justify-between border border-amber-100">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">{u.avatar || '🎓'}</span>
+                    <div>
+                      <div className="text-xs font-black text-stone-800">{u.name}</div>
+                      <div className="text-[10px] font-bold text-amber-600">Lv.{u.level || 1} • {u.xp || 0} XP</div>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => handleInvite(u)} 
+                    className="bg-gradient-to-r from-amber-500 to-orange-500 text-white px-4 py-2 rounded-xl text-xs font-black shadow-md transition transform active:scale-95"
+                  >
+                    申し込む ⚔️
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 対戦リクエスト受信画面（範囲の表示） */}
       {battleState?.status === 'invited' && (
         <div className="bg-amber-50 border-2 border-amber-300 p-4 rounded-2xl text-center space-y-3 animate-bounce">
           <div className="font-black text-sm text-stone-800">
             ⚔️ <span className="text-amber-600">{battleState.opponentName}</span> から対戦申し込みが届きました！
+          </div>
+          <div className="text-[11px] font-bold text-stone-600 bg-white/80 py-1.5 px-3 rounded-xl inline-block border border-amber-200">
+            出題範囲: {battleState.rangeName || 'すべて'}
           </div>
           <div className="flex justify-center gap-3">
             <button onClick={handleAccept} className="bg-emerald-500 text-white px-5 py-2 rounded-xl text-xs font-black shadow-md flex items-center gap-1">
@@ -182,45 +259,20 @@ export default function PvPBattle({ leaderboard, currentUid, questions, userProf
           <div className="font-black text-sm text-stone-800">
             <span className="text-amber-600">{waitingTarget?.name}</span> の応答を待っています…
           </div>
+          <div className="text-[11px] font-bold text-stone-500">
+            出題範囲: {battleState.rangeName}
+          </div>
           <button onClick={handleCancel} className="bg-stone-200 text-stone-700 px-4 py-2 rounded-xl text-xs font-bold">
             キャンセル
           </button>
         </div>
       )}
 
-      {/* 通常時のロビー（相手選択） */}
-      {(!battleState || !battleState.status) && (
-        <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-          {leaderboard.filter(u => u.uid !== currentUid).length === 0 ? (
-            <div className="text-center py-6 text-stone-400 font-bold text-xs">他に部屋に参加しているメンバーがいません</div>
-          ) : (
-            leaderboard.filter(u => u.uid !== currentUid).map(u => (
-              <div key={u.uid} className="bg-amber-50/50 p-3 rounded-2xl flex items-center justify-between border border-amber-100">
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">{u.avatar || '🎓'}</span>
-                  <div>
-                    <div className="text-xs font-black text-stone-800">{u.name}</div>
-                    <div className="text-[10px] font-bold text-amber-600">Lv.{u.level || 1} • {u.xp || 0} XP</div>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => handleInvite(u)} 
-                  className="bg-gradient-to-r from-amber-500 to-orange-500 text-white px-4 py-2 rounded-xl text-xs font-black shadow-md transition transform active:scale-95"
-                >
-                  対戦を申し込む ⚔️
-                </button>
-              </div>
-            ))
-          )}
-        </div>
-      )}
-
-      {/* 一問一答 スピードバトル対戦画面 */}
+      {/* 対戦中画面 */}
       {battleState?.status === 'playing' && (
         <div className="space-y-4 py-2">
-          {/* お互いのHPゲージバー */}
+          {/* HPバー */}
           <div className="grid grid-cols-2 gap-3 bg-amber-50 p-3 rounded-2xl border border-amber-200">
-            {/* 自分 */}
             <div className="space-y-1">
               <div className="flex justify-between text-[11px] font-black text-stone-700">
                 <span>{userProfile.name} (あなた)</span>
@@ -231,7 +283,6 @@ export default function PvPBattle({ leaderboard, currentUid, questions, userProf
               </div>
             </div>
 
-            {/* 相手 */}
             <div className="space-y-1">
               <div className="flex justify-between text-[11px] font-black text-stone-700">
                 <span>{battleState.opponentName}</span>
@@ -243,15 +294,14 @@ export default function PvPBattle({ leaderboard, currentUid, questions, userProf
             </div>
           </div>
 
-          {/* ダメージ・通知メッセージ */}
           {lastDamageText && (
             <div className="text-center font-black text-xs text-amber-600 animate-bounce">
               {lastDamageText}
             </div>
           )}
 
-          {/* 問題回答エリア */}
-          {currentQ ? (
+          {/* 問題エリア */}
+          {activeQuestions.length > 0 && currentQ ? (
             <div className="bg-white border-2 border-amber-300 p-4 rounded-2xl space-y-3 shadow-inner">
               <div className="flex justify-between items-center text-xs font-bold">
                 <span className="bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full font-black">{currentQ.subject}</span>
@@ -259,7 +309,7 @@ export default function PvPBattle({ leaderboard, currentUid, questions, userProf
               </div>
 
               <div className="font-extrabold text-sm text-stone-800 py-2">
-                Q. {currentQ.subQuestions?.[0]?.question || '問題文が読み込めません'}
+                Q. {currentQ.subQuestions?.[0]?.question || '無題'}
               </div>
 
               <form onSubmit={handleAnswerSubmit} className="flex gap-2">
@@ -277,7 +327,9 @@ export default function PvPBattle({ leaderboard, currentUid, questions, userProf
               </form>
             </div>
           ) : (
-            <div className="text-center py-6 text-stone-400 font-bold text-xs">登録されている問題がありません</div>
+            <div className="text-center py-8 text-stone-400 font-bold text-xs bg-amber-50/50 rounded-2xl border border-amber-200">
+              選択された出題範囲に当てはまる問題がありません
+            </div>
           )}
 
           <button onClick={handleCancel} className="w-full bg-stone-100 hover:bg-rose-100 text-stone-600 hover:text-rose-600 py-2 rounded-xl font-bold text-xs border border-stone-200 transition">
