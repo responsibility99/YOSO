@@ -4,7 +4,7 @@ import {
   Home, PlusCircle, ArrowLeft, Trash2, Calendar, Sparkles,
   MessageCircle, Send, Trophy, Medal, Flame, KeyRound, LogOut,
   ImagePlus, X, HelpCircle, Edit, QrCode, Share2, Target, PartyPopper,
-  ArrowUpDown, History, ShieldCheck, Plus, Check, Edit2
+  ArrowUpDown, History, ShieldCheck, Plus, Edit2, Layers, CheckCircle2, XCircle, RotateCcw
 } from 'lucide-react';
 import { db } from './firebase';
 import { 
@@ -237,9 +237,8 @@ export default function App() {
         </div>
       )}
 
-      {/* すっきり2段レイアウト・ヘッダー */}
+      {/* 2段レイアウト・ヘッダー */}
       <header className="bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 sticky top-0 z-30 shadow-md rounded-b-3xl px-4 py-3 text-white space-y-2">
-        {/* 1段目: タイトル & マイプロフィール */}
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => { setActiveTab('home'); setSelectedQuestionId(null); setSelectedFolderId(null); }}>
             <div className="bg-white/20 p-2 rounded-2xl backdrop-blur-md shadow-inner"><BookOpen className="w-5 h-5 text-white" /></div>
@@ -252,7 +251,6 @@ export default function App() {
           </button>
         </div>
 
-        {/* 2段目: 各機能ボタン（サブメニュー） */}
         <div className="flex items-center justify-end gap-2 pt-1 border-t border-white/20">
           <button onClick={() => setShowQrModal(true)} className="bg-white/90 hover:bg-white text-orange-600 px-3 py-1.5 rounded-xl text-xs font-extrabold shadow-sm transition flex items-center gap-1 active:scale-95">
             <QrCode className="w-3.5 h-3.5" /> 招待QR
@@ -316,7 +314,7 @@ export default function App() {
         <NavButton active={activeTab === 'ranking'} icon={<Trophy className="w-6 h-6" />} label="ランキング" onClick={() => { setActiveTab('ranking'); setSelectedQuestionId(null); }} />
       </nav>
 
-      {/* アプリの歴史モーダル（編集機能付き） */}
+      {/* アプリの歴史モーダル */}
       {showHistoryModal && (
         <HistoryModal 
           historyList={historyList} 
@@ -447,18 +445,217 @@ export default function App() {
   );
 }
 
-// 歴史表示＆管理モーダル（インライン編集機能対応）
+// 暗記カード（単語帳）モードコンポーネント
+function FlashcardView({ questions, onBack }) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [showAnswer, setShowAnswer] = useState(false);
+  const [learnedMap, setLearnedMap] = useState({});
+
+  if (questions.length === 0) {
+    return (
+      <div className="bg-white p-8 rounded-3xl text-center space-y-4 shadow-md">
+        <p className="text-stone-400 font-bold">暗記カードにする問題がありません</p>
+        <button onClick={onBack} className="bg-amber-500 text-white px-5 py-2 rounded-xl text-sm font-bold">戻る</button>
+      </div>
+    );
+  }
+
+  const currentQ = questions[currentIndex];
+  const total = questions.length;
+
+  const handleNext = () => {
+    setShowAnswer(false);
+    setCurrentIndex((prev) => (prev + 1) % total);
+  };
+
+  const handlePrev = () => {
+    setShowAnswer(false);
+    setCurrentIndex((prev) => (prev - 1 + total) % total);
+  };
+
+  const markLearned = (isLearned) => {
+    setLearnedMap({ ...learnedMap, [currentQ.id]: isLearned });
+    handleNext();
+  };
+
+  return (
+    <div className="space-y-4 max-w-lg mx-auto w-full">
+      <div className="flex items-center justify-between">
+        <button onClick={onBack} className="flex items-center gap-1 text-sm font-extrabold text-stone-600 bg-white border border-stone-200 px-3 py-1.5 rounded-full shadow-sm">
+          <ArrowLeft className="w-4 h-4" /> 戻る
+        </button>
+        <span className="text-xs font-black text-amber-700 bg-amber-100 px-3 py-1 rounded-full">
+          🎴 暗記カード ({currentIndex + 1} / {total})
+        </span>
+      </div>
+
+      {/* プログレスバー */}
+      <div className="w-full bg-stone-200 h-2 rounded-full overflow-hidden">
+        <div className="bg-amber-500 h-2 transition-all duration-300" style={{ width: `${((currentIndex + 1) / total) * 100}%` }}></div>
+      </div>
+
+      {/* フリップ暗記カード */}
+      <div 
+        onClick={() => setShowAnswer(!showAnswer)}
+        className="bg-white min-h-[260px] p-6 rounded-3xl border-2 border-amber-200 shadow-xl flex flex-col justify-between cursor-pointer transform transition active:scale-98 relative overflow-hidden"
+      >
+        <div className="flex justify-between items-center">
+          <span className="text-[10px] font-black bg-amber-100 text-amber-800 px-2.5 py-1 rounded-md">{currentQ.subject}</span>
+          {learnedMap[currentQ.id] === true && <span className="text-xs font-black text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5"/> 覚えた</span>}
+          {learnedMap[currentQ.id] === false && <span className="text-xs font-black text-rose-600 bg-rose-50 border border-rose-200 px-2.5 py-0.5 rounded-full flex items-center gap-1"><XCircle className="w-3.5 h-3.5"/> もう一回</span>}
+        </div>
+
+        <div className="my-6 text-center space-y-3">
+          <p className="text-xs font-bold text-amber-600 tracking-wider">
+            {showAnswer ? '【 解答 】' : '【 問題（タップで答えを表示） 】'}
+          </p>
+          <div className="text-lg font-black text-stone-800 leading-relaxed">
+            {showAnswer ? (
+              <span className="text-rose-600 bg-rose-50 px-3 py-1 rounded-xl border border-rose-100 inline-block">
+                {currentQ.subQuestions?.[0]?.answer || '解答なし'}
+              </span>
+            ) : (
+              <span>{currentQ.subQuestions?.[0]?.question || '無題'}</span>
+            )}
+          </div>
+        </div>
+
+        <p className="text-[10px] text-center font-bold text-stone-400">
+          💡 カードをタップして裏返す
+        </p>
+      </div>
+
+      {/* 操作アクションボタン */}
+      <div className="flex gap-2">
+        <button onClick={() => markLearned(false)} className="flex-1 bg-rose-100 hover:bg-rose-200 text-rose-700 py-3 rounded-2xl font-black text-xs flex items-center justify-center gap-1 transition">
+          <XCircle className="w-4 h-4"/> もう一回
+        </button>
+        <button onClick={() => markLearned(true)} className="flex-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 py-3 rounded-2xl font-black text-xs flex items-center justify-center gap-1 transition">
+          <CheckCircle2 className="w-4 h-4"/> 覚えた！
+        </button>
+      </div>
+
+      <div className="flex justify-between gap-2 pt-2">
+        <button onClick={handlePrev} className="flex-1 bg-white border border-stone-200 text-stone-600 py-2.5 rounded-xl font-bold text-xs shadow-sm">
+          ◀ 前の問題
+        </button>
+        <button onClick={handleNext} className="flex-1 bg-amber-500 text-white py-2.5 rounded-xl font-bold text-xs shadow-md">
+          次の問題 ▶
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ホーム表示コンポーネント（単語帳モード切り替え機能付き）
+function HomeView({ folders, questions, onSelectQuestion, onOpenFolderModal, onToggleLike, secretCode, selectedFolderId, onSelectFolder, onOpenQr }) {
+  const [sortBy, setSortBy] = useState('newest');
+  const [isFlashcardMode, setIsFlashcardMode] = useState(false);
+
+  let rawQuestions = selectedFolderId ? questions.filter(q => q.folderId === selectedFolderId) : questions;
+  const selectedFolder = folders.find(f => f.id === selectedFolderId);
+
+  const displayQuestions = [...rawQuestions].sort((a, b) => {
+    if (sortBy === 'hit') return (b.hitCount || 0) - (a.hitCount || 0);
+    if (sortBy === 'likes') return (b.likes || 0) - (a.likes || 0);
+    if (sortBy === 'comments') return (b.comments?.length || 0) - (a.comments?.length || 0);
+    return 0;
+  });
+
+  if (isFlashcardMode) {
+    return <FlashcardView questions={displayQuestions} onBack={() => setIsFlashcardMode(false)} />;
+  }
+
+  return (
+    <div className="space-y-8">
+      <div className="bg-gradient-to-r from-orange-100 to-amber-100 border border-orange-200/80 p-3 rounded-2xl flex items-center justify-between text-xs font-black text-orange-900 shadow-sm">
+        <div className="flex items-center gap-2"><KeyRound className="w-4 h-4 text-orange-600"/> 参加中の合言葉: <span className="bg-white/80 backdrop-blur-sm px-2.5 py-1 rounded-lg border border-orange-200">{secretCode}</span></div>
+        <button onClick={onOpenQr} className="bg-white text-orange-700 px-3 py-1 rounded-xl border border-orange-200 hover:bg-orange-50 transition flex items-center gap-1 shadow-sm">
+          <QrCode className="w-3.5 h-3.5 text-orange-500" /> 招待
+        </button>
+      </div>
+      
+      {!selectedFolderId ? (
+        <div>
+          <div className="flex justify-between items-center mb-4"><h2 className="text-lg font-extrabold text-stone-700 flex items-center gap-2"><FolderPlus className="w-5 h-5 text-amber-500" /> フォルダ</h2><button onClick={onOpenFolderModal} className="text-xs text-orange-700 font-extrabold bg-orange-100 px-4 py-2 rounded-full hover:bg-orange-200 transition">＋ 作成</button></div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {folders.map(f => (
+              <div key={f.id} onClick={() => onSelectFolder(f.id)} className="bg-white p-4 rounded-2xl border shadow-sm cursor-pointer hover:-translate-y-1 transition hover:shadow-md">
+                <FolderPlus className="w-8 h-8 text-amber-400 mb-2" />
+                <h3 className="font-extrabold text-sm text-stone-700 truncate">{f.name}</h3>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center gap-3 bg-white p-4 rounded-2xl border shadow-sm">
+           <button onClick={() => onSelectFolder(null)} className="flex items-center gap-1 text-sm font-bold text-stone-600 bg-stone-100 px-3 py-1.5 rounded-full hover:bg-stone-200 transition"><ArrowLeft className="w-4 h-4" /> 戻る</button>
+           <h2 className="text-lg font-extrabold text-stone-800 flex items-center gap-2"><FolderPlus className="w-5 h-5 text-amber-500"/> {selectedFolder?.name}</h2>
+        </div>
+      )}
+
+      <div>
+        <div className="flex flex-wrap justify-between items-center gap-2 mb-4">
+          <h2 className="text-lg font-extrabold text-stone-700 flex items-center gap-2"><Sparkles className="w-5 h-5 text-orange-400" /> {selectedFolderId ? 'フォルダ内の問題' : 'すべての予想問題'}</h2>
+          
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => setIsFlashcardMode(true)} 
+              className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white px-3 py-1.5 rounded-xl text-xs font-black shadow-sm flex items-center gap-1 transition transform active:scale-95"
+            >
+              <Layers className="w-3.5 h-3.5" /> 🎴 単語帳
+            </button>
+
+            <div className="flex items-center gap-1 bg-white border border-stone-200 px-3 py-1.5 rounded-xl shadow-sm">
+              <ArrowUpDown className="w-3.5 h-3.5 text-stone-400" />
+              <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="text-xs font-extrabold text-stone-700 bg-transparent outline-none cursor-pointer">
+                <option value="newest">新着順</option>
+                <option value="hit">🎯 的中順</option>
+                <option value="likes">👍 いいね順</option>
+                <option value="comments">💬 コメント順</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {displayQuestions.length === 0 ? (
+          <div className="text-center py-8 text-stone-400 font-bold text-sm bg-white rounded-3xl border border-dashed">問題がありません</div>
+        ) : (
+          <div className="space-y-4">
+            {displayQuestions.map(q => (
+              <div key={q.id} onClick={() => onSelectQuestion(q.id)} className="bg-white p-5 rounded-3xl border shadow-md hover:shadow-lg transition cursor-pointer relative overflow-hidden">
+                {q.hitCount > 0 && (
+                  <div className="absolute top-0 right-0 bg-gradient-to-l from-rose-500 to-orange-500 text-white text-[10px] font-black px-3 py-1 rounded-bl-xl shadow-sm flex items-center gap-1">
+                    <Target className="w-3 h-3"/> 🎯 的中 {q.hitCount}人
+                  </div>
+                )}
+                <span className="text-[10px] font-extrabold bg-amber-100 text-amber-800 px-2.5 py-1 rounded-md">{q.subject}</span>
+                <h3 className="font-extrabold text-lg text-stone-800 mt-2 truncate">{q.subQuestions?.[0]?.question || '無題の問題'}</h3>
+                <div className="flex justify-between items-center text-xs border-t pt-3 mt-3">
+                  <span className="font-bold text-stone-400">作成: {q.author}</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-stone-400 font-bold flex items-center gap-1"><MessageCircle className="w-3.5 h-3.5"/> {q.comments?.length || 0}</span>
+                    <button onClick={(e) => { e.stopPropagation(); onToggleLike(q.id); }} className={`flex items-center gap-1.5 font-extrabold px-3 py-1.5 rounded-full ${q.likedByMe ? 'bg-rose-100 text-rose-600' : 'bg-stone-50 text-stone-500'}`}><ThumbsUp className="w-4 h-4" /> {q.likes || 0}</button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function HistoryModal({ historyList, isAdmin, onClose, onUnlockAdmin }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
 
-  // フォーム用入力変数
   const [version, setVersion] = useState('');
   const [date, setDate] = useState('');
   const [title, setTitle] = useState('');
   const [desc, setDesc] = useState('');
 
-  // 編集用データ設定
   const startEdit = (item) => {
     setEditingId(item.id);
     setVersion(item.version || '');
@@ -539,7 +736,6 @@ function HistoryModal({ historyList, isAdmin, onClose, onUnlockAdmin }) {
                 <div className="absolute -left-2 top-0 w-3.5 h-3.5 bg-purple-500 rounded-full border-2 border-white"></div>
                 
                 {editingId === item.id ? (
-                  /* 編集モード画面 */
                   <div className="bg-purple-50 p-3 rounded-2xl space-y-2 border border-purple-200 text-xs font-bold">
                     <input type="text" value={version} onChange={e => setVersion(e.target.value)} className="w-full p-2 border rounded-lg bg-white" placeholder="バージョン" />
                     <input type="text" value={date} onChange={e => setDate(e.target.value)} className="w-full p-2 border rounded-lg bg-white" placeholder="日付" />
@@ -551,7 +747,6 @@ function HistoryModal({ historyList, isAdmin, onClose, onUnlockAdmin }) {
                     </div>
                   </div>
                 ) : (
-                  /* 通常表示画面 */
                   <>
                     <div className="flex items-center justify-between text-xs font-black text-purple-600 mb-1">
                       <span>{item.version}</span>
@@ -878,91 +1073,6 @@ function QuestionDetailView({ question, currentUid, onBack, onDelete, onUpdate, 
         <div className="space-y-2 pt-2">
           {(question.comments || []).map(c => <div key={c.id} className="text-sm bg-stone-50 p-3 rounded-2xl border"><span className="font-extrabold text-amber-700 mr-2">{c.user}</span><span className="font-medium">{c.text}</span></div>)}
         </div>
-      </div>
-    </div>
-  );
-}
-
-function HomeView({ folders, questions, onSelectQuestion, onOpenFolderModal, onToggleLike, secretCode, selectedFolderId, onSelectFolder, onOpenQr }) {
-  const [sortBy, setSortBy] = useState('newest');
-
-  let rawQuestions = selectedFolderId ? questions.filter(q => q.folderId === selectedFolderId) : questions;
-  const selectedFolder = folders.find(f => f.id === selectedFolderId);
-
-  const displayQuestions = [...rawQuestions].sort((a, b) => {
-    if (sortBy === 'hit') return (b.hitCount || 0) - (a.hitCount || 0);
-    if (sortBy === 'likes') return (b.likes || 0) - (a.likes || 0);
-    if (sortBy === 'comments') return (b.comments?.length || 0) - (a.comments?.length || 0);
-    return 0;
-  });
-
-  return (
-    <div className="space-y-8">
-      <div className="bg-gradient-to-r from-orange-100 to-amber-100 border border-orange-200/80 p-3 rounded-2xl flex items-center justify-between text-xs font-black text-orange-900 shadow-sm">
-        <div className="flex items-center gap-2"><KeyRound className="w-4 h-4 text-orange-600"/> 参加中の合言葉: <span className="bg-white/80 backdrop-blur-sm px-2.5 py-1 rounded-lg border border-orange-200">{secretCode}</span></div>
-        <button onClick={onOpenQr} className="bg-white text-orange-700 px-3 py-1 rounded-xl border border-orange-200 hover:bg-orange-50 transition flex items-center gap-1 shadow-sm">
-          <QrCode className="w-3.5 h-3.5 text-orange-500" /> 招待
-        </button>
-      </div>
-      
-      {!selectedFolderId ? (
-        <div>
-          <div className="flex justify-between items-center mb-4"><h2 className="text-lg font-extrabold text-stone-700 flex items-center gap-2"><FolderPlus className="w-5 h-5 text-amber-500" /> フォルダ</h2><button onClick={onOpenFolderModal} className="text-xs text-orange-700 font-extrabold bg-orange-100 px-4 py-2 rounded-full hover:bg-orange-200 transition">＋ 作成</button></div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {folders.map(f => (
-              <div key={f.id} onClick={() => onSelectFolder(f.id)} className="bg-white p-4 rounded-2xl border shadow-sm cursor-pointer hover:-translate-y-1 transition hover:shadow-md">
-                <FolderPlus className="w-8 h-8 text-amber-400 mb-2" />
-                <h3 className="font-extrabold text-sm text-stone-700 truncate">{f.name}</h3>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <div className="flex items-center gap-3 bg-white p-4 rounded-2xl border shadow-sm">
-           <button onClick={() => onSelectFolder(null)} className="flex items-center gap-1 text-sm font-bold text-stone-600 bg-stone-100 px-3 py-1.5 rounded-full hover:bg-stone-200 transition"><ArrowLeft className="w-4 h-4" /> 戻る</button>
-           <h2 className="text-lg font-extrabold text-stone-800 flex items-center gap-2"><FolderPlus className="w-5 h-5 text-amber-500"/> {selectedFolder?.name}</h2>
-        </div>
-      )}
-
-      <div>
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-extrabold text-stone-700 flex items-center gap-2"><Sparkles className="w-5 h-5 text-orange-400" /> {selectedFolderId ? 'フォルダ内の問題' : 'すべての予想問題'}</h2>
-          
-          <div className="flex items-center gap-1 bg-white border border-stone-200 px-3 py-1.5 rounded-xl shadow-sm">
-            <ArrowUpDown className="w-3.5 h-3.5 text-stone-400" />
-            <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="text-xs font-extrabold text-stone-700 bg-transparent outline-none cursor-pointer">
-              <option value="newest">新着順</option>
-              <option value="hit">🎯 的中順</option>
-              <option value="likes">👍 いいね順</option>
-              <option value="comments">💬 コメント順</option>
-            </select>
-          </div>
-        </div>
-
-        {displayQuestions.length === 0 ? (
-          <div className="text-center py-8 text-stone-400 font-bold text-sm bg-white rounded-3xl border border-dashed">問題がありません</div>
-        ) : (
-          <div className="space-y-4">
-            {displayQuestions.map(q => (
-              <div key={q.id} onClick={() => onSelectQuestion(q.id)} className="bg-white p-5 rounded-3xl border shadow-md hover:shadow-lg transition cursor-pointer relative overflow-hidden">
-                {q.hitCount > 0 && (
-                  <div className="absolute top-0 right-0 bg-gradient-to-l from-rose-500 to-orange-500 text-white text-[10px] font-black px-3 py-1 rounded-bl-xl shadow-sm flex items-center gap-1">
-                    <Target className="w-3 h-3"/> 🎯 的中 {q.hitCount}人
-                  </div>
-                )}
-                <span className="text-[10px] font-extrabold bg-amber-100 text-amber-800 px-2.5 py-1 rounded-md">{q.subject}</span>
-                <h3 className="font-extrabold text-lg text-stone-800 mt-2 truncate">{q.subQuestions?.[0]?.question || '無題の問題'}</h3>
-                <div className="flex justify-between items-center text-xs border-t pt-3 mt-3">
-                  <span className="font-bold text-stone-400">作成: {q.author}</span>
-                  <div className="flex items-center gap-3">
-                    <span className="text-stone-400 font-bold flex items-center gap-1"><MessageCircle className="w-3.5 h-3.5"/> {q.comments?.length || 0}</span>
-                    <button onClick={(e) => { e.stopPropagation(); onToggleLike(q.id); }} className={`flex items-center gap-1.5 font-extrabold px-3 py-1.5 rounded-full ${q.likedByMe ? 'bg-rose-100 text-rose-600' : 'bg-stone-50 text-stone-500'}`}><ThumbsUp className="w-4 h-4" /> {q.likes || 0}</button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );
