@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Swords, Zap, Flame, Shield, Heart } from 'lucide-react';
+import React from 'react';
+import { Swords, Zap } from 'lucide-react';
 
 // 教科ごとの属性定義
 export const SUBJECT_ELEMENTS = {
@@ -18,6 +18,8 @@ export const SUBJECT_ELEMENTS = {
   '音楽': { element: 'light', name: '✨ 光属性', color: 'bg-amber-400 text-stone-900' }
 };
 
+export const SUBJECTS = Object.keys(SUBJECT_ELEMENTS);
+
 // 初期ボスデータ
 export const INITIAL_BOSSES = [
   { id: 'b1', name: '期末テストの魔王 (開成級)', maxHp: 15000, currentHp: 15000, atk: 120, icon: '👹', desc: '全員の総力で問題を解いてHPを削り切れ！' },
@@ -29,7 +31,6 @@ export default function BossBattle({ bossData, questions, onSelectQuestion }) {
 
   return (
     <div className="space-y-6">
-      {/* 討伐バナー */}
       <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-slate-900 p-5 rounded-3xl shadow-2xl border border-purple-500/30 relative overflow-hidden space-y-4">
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-3">
@@ -44,7 +45,6 @@ export default function BossBattle({ bossData, questions, onSelectQuestion }) {
           </span>
         </div>
 
-        {/* ゲージ */}
         <div className="space-y-1">
           <div className="flex justify-between text-xs font-extrabold text-slate-300">
             <span>ボスHP</span>
@@ -59,10 +59,9 @@ export default function BossBattle({ bossData, questions, onSelectQuestion }) {
         </div>
       </div>
 
-      {/* 攻撃につかうカード選択 */}
       <div className="space-y-3">
         <h3 className="text-sm font-black text-slate-200 flex items-center gap-2">
-          <Swords className="w-4 h-4 text-amber-400" /> ボス攻撃用スキルカード（予想問題）
+          <Swords className="w-4 h-4 text-amber-400" /> ボス攻撃用スキルカード
         </h3>
         
         {questions.length === 0 ? (
