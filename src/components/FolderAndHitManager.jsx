@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
-import { FolderPlus, Layers, CheckCircle2, QrCode, Plus, X } from 'lucide-react';
+import { FolderPlus, X } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { SUBJECT_ELEMENTS } from './BossBattle';
 
-// フォルダ管理 & 問題カード一覧 (的中ボタン付き)
 export default function FolderAndHitManager({ 
   folders, 
   questions, 
@@ -17,7 +16,6 @@ export default function FolderAndHitManager({
   const [showFolderModal, setShowFolderModal] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
 
-  // 新規フォルダ作成
   const handleCreateFolder = async (e) => {
     e.preventDefault();
     if (!newFolderName.trim()) return;
@@ -34,9 +32,8 @@ export default function FolderAndHitManager({
     }
   };
 
-  // 神的中（🎯テストに出た！）切り替えロジック
   const handleToggleHit = async (e, q) => {
-    e.stopPropagation(); // 詳細画面への遷移を防止
+    e.stopPropagation();
     
     const hitBy = q.hitBy || [];
     const isAlreadyHit = hitBy.includes(userProfile.uid);
@@ -57,14 +54,12 @@ export default function FolderAndHitManager({
     }
   };
 
-  // フォルダでフィルタリングされた問題リスト
   const filteredQuestions = selectedFolderId 
     ? questions.filter(q => q.folderId === selectedFolderId) 
     : questions;
 
   return (
     <div className="space-y-4">
-      {/* フォルダ選択・追加バー */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
         <button 
           onClick={() => onSelectFolder(null)} 
@@ -102,7 +97,6 @@ export default function FolderAndHitManager({
         </button>
       </div>
 
-      {/* 問題カード一覧 */}
       <div className="space-y-2.5">
         {filteredQuestions.length === 0 ? (
           <div className="text-center py-8 text-slate-500 font-bold text-xs bg-slate-800 rounded-3xl border border-slate-700">
@@ -134,7 +128,6 @@ export default function FolderAndHitManager({
                   </h4>
                 </div>
 
-                {/* 神的中（🎯出た！）ボタン */}
                 <button 
                   onClick={(e) => handleToggleHit(e, q)} 
                   className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition transform active:scale-95 ${
@@ -153,9 +146,8 @@ export default function FolderAndHitManager({
         )}
       </div>
 
-      {/* フォルダ作成モーダル */}
       {showFolderModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <form onSubmit={handleCreateFolder} className="bg-slate-800 p-6 rounded-3xl max-w-sm w-full space-y-4 border border-slate-700 shadow-2xl">
             <div className="flex justify-between items-center border-b border-slate-700 pb-2">
               <h3 className="font-extrabold text-base text-amber-400">新規フォルダ作成</h3>
