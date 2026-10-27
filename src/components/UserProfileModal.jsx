@@ -1,5 +1,5 @@
 import React from 'react';
-import { Medal, Calendar, ShieldCheck, Users, X, LogOut, QrCode, HelpCircle, History } from 'lucide-react';
+import { Medal, Calendar, ShieldCheck, X } from 'lucide-react';
 
 export default function UserProfileModal({ 
   userProfile, 
@@ -7,7 +7,6 @@ export default function UserProfileModal({
   badges, 
   onClose 
 }) {
-  // テストまでの日数計算
   const getDaysUntilTest = () => {
     if (!userProfile.testDate) return null;
     const today = new Date();
@@ -19,7 +18,7 @@ export default function UserProfileModal({
   const daysLeft = getDaysUntilTest();
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
       <div className="bg-slate-800 p-6 rounded-3xl max-w-sm w-full border border-slate-700 text-slate-200 shadow-2xl flex flex-col max-h-[85vh]">
         <div className="flex justify-between items-center border-b border-slate-700 pb-3 mb-4">
           <h3 className="font-extrabold text-lg text-amber-400">プレイヤー情報 & 実績</h3>
@@ -27,7 +26,6 @@ export default function UserProfileModal({
         </div>
 
         <div className="overflow-y-auto pr-1 space-y-4 flex-1">
-          {/* プレイヤー基本情報 */}
           <div className="flex items-center gap-4 bg-slate-700/50 p-4 rounded-2xl border border-slate-600">
             <div className="text-4xl">{userProfile.avatar || '⚔️'}</div>
             <div>
@@ -38,9 +36,8 @@ export default function UserProfileModal({
             </div>
           </div>
 
-          {/* テストカウントダウン */}
           <div className="bg-slate-900 p-3.5 rounded-2xl border border-slate-700 space-y-2">
-            <label className="text-[10px] font-bold text-slate-400 block flex items-center gap-1">
+            <label className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
               <Calendar className="w-3.5 h-3.5 text-amber-400" /> 次のテスト日程
             </label>
             <input 
@@ -56,7 +53,6 @@ export default function UserProfileModal({
             )}
           </div>
 
-          {/* プロフィール編集 */}
           <div className="space-y-3">
             <div>
               <label className="text-[10px] font-bold text-slate-400 mb-1 block">プレイヤー名</label>
@@ -78,7 +74,6 @@ export default function UserProfileModal({
             </div>
           </div>
 
-          {/* 実績バッジ一覧 */}
           <div className="space-y-2 pt-2 border-t border-slate-700">
             <h4 className="text-xs font-extrabold text-amber-400 flex items-center gap-1">
               <ShieldCheck className="w-4 h-4" /> 獲得バッジ
