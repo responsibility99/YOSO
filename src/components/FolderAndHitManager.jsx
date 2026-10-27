@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { FolderPlus, ArrowUpDown, X } from 'lucide-react';
 import { db } from '../firebase';
-import { collection, addDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
 
 export default function FolderAndHitManager({ 
   folders, 
@@ -14,9 +14,9 @@ export default function FolderAndHitManager({
 }) {
   const [showFolderModal, setShowFolderModal] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
-  const [sortMode, setSortMode] = useState('newest'); // 'newest' | 'hits'
+  const [sortMode, setSortMode] = useState('newest');
 
-  // 新規フォルダ作成
+  // 新規フォルダ作成処理
   const handleCreateFolder = async (e) => {
     e.preventDefault();
     if (!newFolderName.trim()) return;
@@ -33,7 +33,7 @@ export default function FolderAndHitManager({
     }
   };
 
-  // 神的中（🎯出た！）ボタン
+  // 神的中（🎯出た！）ボタン処理
   const handleToggleHit = async (e, q) => {
     e.stopPropagation();
     
@@ -56,7 +56,7 @@ export default function FolderAndHitManager({
     }
   };
 
-  // フィルタリングと並び替え
+  // フィルタリング ＆ ソート
   let filteredQuestions = selectedFolderId 
     ? questions.filter(q => q.folderId === selectedFolderId) 
     : [...questions];
@@ -69,9 +69,9 @@ export default function FolderAndHitManager({
 
   return (
     <div className="space-y-4">
-      {/* フォルダ選択 ＆ ソートボタン */}
-      <div className="flex items-center justify-between gap-2 overflow-x-auto pb-1">
-        <div className="flex items-center gap-2 overflow-x-auto scrollbar-none">
+      {/* フォルダ選択 ＆ ソート */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-1">
           <button 
             onClick={() => onSelectFolder(null)} 
             className={`px-3.5 py-1.5 rounded-full text-xs font-black whitespace-nowrap transition ${
@@ -102,22 +102,21 @@ export default function FolderAndHitManager({
 
           <button 
             onClick={() => setShowFolderModal(true)} 
-            className="bg-white hover:bg-amber-50 text-amber-600 border border-amber-200 px-3 py-1.5 rounded-full text-xs font-black flex items-center gap-1 whitespace-nowrap"
+            className="bg-white hover:bg-amber-50 text-amber-600 border border-amber-200 px-3 py-1.5 rounded-full text-xs font-black flex items-center gap-1 whitespace-nowrap shadow-sm"
           >
             <FolderPlus className="w-3.5 h-3.5" /> フォルダ作成
           </button>
         </div>
 
-        {/* 新着順/的中順 切り替え */}
         <button 
           onClick={() => setSortMode(sortMode === 'newest' ? 'hits' : 'newest')}
-          className="bg-amber-100 hover:bg-amber-200 text-amber-800 px-3 py-1.5 rounded-xl text-[11px] font-black flex items-center gap-1 whitespace-nowrap shadow-sm"
+          className="bg-amber-100 hover:bg-amber-200 text-amber-800 px-2.5 py-1.5 rounded-xl text-[11px] font-black flex items-center gap-1 whitespace-nowrap shadow-sm shrink-0"
         >
           <ArrowUpDown className="w-3 h-3"/> {sortMode === 'newest' ? '新着順' : '的中順'}
         </button>
       </div>
 
-      {/* 問題カード一覧 */}
+      {/* 問題一覧（スマホで問題文が2行表示されるよう改善） */}
       <div className="space-y-2.5">
         {filteredQuestions.length === 0 ? (
           <div className="text-center py-8 text-stone-400 font-bold text-xs bg-white rounded-3xl border border-amber-200">
@@ -133,10 +132,10 @@ export default function FolderAndHitManager({
               <div 
                 key={q.id} 
                 onClick={() => onSelectQuestion(q.id)}
-                className="bg-white hover:bg-amber-50/50 p-4 rounded-2xl border border-amber-200/80 cursor-pointer transition flex justify-between items-center shadow-sm"
+                className="bg-white hover:bg-amber-50/50 p-3.5 rounded-2xl border border-amber-200/80 cursor-pointer transition flex items-start justify-between gap-3 shadow-sm"
               >
-                <div className="space-y-1.5 flex-1 pr-3">
-                  <div className="flex items-center gap-2">
+                <div className="space-y-1.5 flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="bg-amber-100 text-amber-800 text-[10px] font-black px-2.5 py-0.5 rounded-full">
                       {q.subject}
                     </span>
@@ -149,14 +148,16 @@ export default function FolderAndHitManager({
                       by {q.author || '匿名'}
                     </span>
                   </div>
-                  <h4 className="font-extrabold text-xs text-stone-800 truncate">
+                  
+                  {/* タイトル（2行までしっかり表示） */}
+                  <h4 className="font-extrabold text-xs text-stone-800 leading-snug line-clamp-2 break-words">
                     Q. {q.subQuestions?.[0]?.question || '無題'}
                   </h4>
                 </div>
 
                 <button 
                   onClick={(e) => handleToggleHit(e, q)} 
-                  className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition transform active:scale-95 ${
+                  className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1 transition shrink-0 transform active:scale-95 ${
                     isHitByMe 
                       ? 'bg-rose-500 text-white shadow-md' 
                       : 'bg-amber-50 hover:bg-amber-100 text-stone-700 border border-amber-200'
@@ -164,7 +165,7 @@ export default function FolderAndHitManager({
                   title="テストに出たら押そう！"
                 >
                   <span>🎯</span>
-                  <span>{hitCount > 0 ? `${hitCount}的中` : '出た！'}</span>
+                  <span>{hitCount > 0 ? `${hitCount}` : '出た！'}</span>
                 </button>
               </div>
             );
