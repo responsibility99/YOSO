@@ -4,7 +4,8 @@ import {
   Home, PlusCircle, ArrowLeft, Trash2, Calendar, Sparkles,
   MessageCircle, Send, Trophy, Medal, Flame, KeyRound, LogOut,
   ImagePlus, X, HelpCircle, Edit, QrCode, Share2, Target, PartyPopper,
-  ArrowUpDown, History, ShieldCheck, Plus, Edit2, Layers, CheckCircle2, XCircle, RotateCcw
+  ArrowUpDown, History, ShieldCheck, Plus, Edit2, Layers, CheckCircle2, XCircle,
+  Users, Filter, Award, ChevronRight
 } from 'lucide-react';
 import { db } from './firebase';
 import { 
@@ -46,6 +47,7 @@ export default function App() {
   });
 
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showMembersModal, setShowMembersModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
@@ -57,6 +59,7 @@ export default function App() {
   const [showFolderModal, setShowFolderModal] = useState(false);
   const [questions, setQuestions] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
   
   const [historyList, setHistoryList] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -96,7 +99,9 @@ export default function App() {
     const q = query(collection(db, 'users'), orderBy('xp', 'desc'));
     const unsub = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      setLeaderboard(data.filter(d => d.secretCode === userProfile.secretCode).slice(0, 30));
+      const filtered = data.filter(d => d.secretCode === userProfile.secretCode);
+      setLeaderboard(filtered.slice(0, 30));
+      setAllUsers(filtered);
     });
     return () => unsub();
   }, [userProfile.secretCode]);
@@ -148,7 +153,7 @@ export default function App() {
         lastHitAt: isAlreadyHit ? null : Date.now()
       });
 
-      if (!isAlreadyHit) gainXP(15, null);
+      if (!isAlreadyHit) gainXP(15, 'hitCount');
     } catch (err) {}
   };
 
@@ -245,10 +250,15 @@ export default function App() {
             <h1 className="font-black text-xl tracking-wider drop-shadow-md">YOSO</h1>
           </div>
 
-          <button onClick={() => setShowProfileModal(true)} className="bg-white/20 hover:bg-white/30 text-white px-3 py-1.5 rounded-full text-xs font-bold backdrop-blur-md border border-white/30 shadow-sm transition flex items-center gap-2 active:scale-95">
-            <span className="bg-yellow-300 text-stone-900 px-2 py-0.5 rounded-full text-[10px] font-black">Lv.{userProfile.level}</span>
-            <span className="truncate max-w-[100px]">{userProfile.avatar} {userProfile.name}</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setShowMembersModal(true)} className="bg-white/20 hover:bg-white/30 text-white px-3 py-1.5 rounded-full text-xs font-bold backdrop-blur-md border border-white/30 shadow-sm transition flex items-center gap-1 active:scale-95">
+              <Users className="w-3.5 h-3.5" /> メンバー({allUsers.length})
+            </button>
+            <button onClick={() => setShowProfileModal(true)} className="bg-white/20 hover:bg-white/30 text-white px-3 py-1.5 rounded-full text-xs font-bold backdrop-blur-md border border-white/30 shadow-sm transition flex items-center gap-2 active:scale-95">
+              <span className="bg-yellow-300 text-stone-900 px-2 py-0.5 rounded-full text-[10px] font-black">Lv.{userProfile.level}</span>
+              <span className="truncate max-w-[90px]">{userProfile.avatar} {userProfile.name}</span>
+            </button>
+          </div>
         </div>
 
         <div className="flex items-center justify-end gap-2 pt-1 border-t border-white/20">
@@ -302,7 +312,7 @@ export default function App() {
             {activeTab === 'home' && <HomeView folders={folders} questions={questions} onSelectQuestion={setSelectedQuestionId} onOpenFolderModal={() => setShowFolderModal(true)} onToggleLike={handleToggleLike} secretCode={userProfile.secretCode} selectedFolderId={selectedFolderId} onSelectFolder={setSelectedFolderId} onOpenQr={() => setShowQrModal(true)} />}
             {activeTab === 'create' && <CreateQuestionView folders={folders} defaultFolderId={selectedFolderId || (folders[0]?.id || '')} userProfile={userProfile} onSuccess={() => { gainXP(50, 'totalPosts'); setActiveTab('home'); }} />}
             {activeTab === 'chat' && <ChatView userProfile={userProfile} onMessageSent={() => gainXP(10, 'totalChats')} />}
-            {activeTab === 'ranking' && <RankingView leaderboard={leaderboard} currentUid={userProfile.uid} />}
+            {activeTab === 'ranking' && <RankingView leaderboard={leaderboard} currentUid={userProfile.uid} onOpenMembers={() => setShowMembersModal(true)} />}
           </>
         )}
       </main>
@@ -313,6 +323,15 @@ export default function App() {
         <NavButton active={activeTab === 'chat'} icon={<MessageCircle className="w-6 h-6" />} label="チャット" onClick={() => { setActiveTab('chat'); setSelectedQuestionId(null); }} />
         <NavButton active={activeTab === 'ranking'} icon={<Trophy className="w-6 h-6" />} label="ランキング" onClick={() => { setActiveTab('ranking'); setSelectedQuestionId(null); }} />
       </nav>
+
+      {/* ユーザープロフィール一覧（全員のプロフィール）モーダル */}
+      {showMembersModal && (
+        <AllUsersModal 
+          users={allUsers} 
+          currentUid={userProfile.uid} 
+          onClose={() => setShowMembersModal(false)} 
+        />
+      )}
 
       {/* アプリの歴史モーダル */}
       {showHistoryModal && (
@@ -378,13 +397,13 @@ export default function App() {
                 <h4 className="text-amber-800 font-extrabold mb-1">🔑 グループ（合言葉）</h4>
                 <p className="text-xs">同じ合言葉を入力した人同士で問題やチャットが共有されます。右上のQRコードから友達を呼び込もう！</p>
               </div>
+              <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100">
+                <h4 className="text-orange-800 font-extrabold mb-1">🎴 暗記カード（単語帳）</h4>
+                <p className="text-xs">ホーム右上から暗記カードモードを起動できます。教科やフォルダで範囲を絞り込んで復習可能です！</p>
+              </div>
               <div className="bg-rose-50 p-4 rounded-2xl border border-rose-100">
                 <h4 className="text-rose-800 font-extrabold mb-1">🎯 テスト的中（神予想！）</h4>
                 <p className="text-xs">テスト後に実際に問題が出たら詳細画面の「🎯 出た！」を押そう！押すと投稿者が全員の画面で祝福されます。</p>
-              </div>
-              <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100">
-                <h4 className="text-orange-800 font-extrabold mb-1">✍️ 問題の投稿・解答・編集</h4>
-                <p className="text-xs">「投稿」タブから問題を作成できます。投稿後は詳細画面からいつでも編集・削除が可能です。</p>
               </div>
             </div>
             <div className="mt-4 pt-3 border-t">
@@ -394,7 +413,7 @@ export default function App() {
         </div>
       )}
 
-      {/* プロフィールモーダル */}
+      {/* マイプロフィールモーダル */}
       {showProfileModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white p-6 rounded-3xl max-w-sm w-full shadow-2xl flex flex-col max-h-[85vh]">
@@ -424,6 +443,9 @@ export default function App() {
               </div>
             </div>
             <div className="mt-4 pt-3 border-t flex flex-col gap-2">
+              <button onClick={() => { setShowProfileModal(false); setShowMembersModal(true); }} className="w-full bg-stone-100 hover:bg-stone-200 text-stone-700 py-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1">
+                <Users className="w-4 h-4 text-stone-500"/> グループ全員のプロフィールを見る
+              </button>
               <button onClick={() => setShowProfileModal(false)} className="w-full bg-amber-500 text-white py-3 rounded-xl text-sm font-extrabold shadow-lg">保存して閉じる</button>
               <button onClick={() => { if(window.confirm('グループから退出しますか？')) { setUserProfile({...userProfile, secretCode: ''}); setShowProfileModal(false); } }} className="w-full py-2 text-xs font-bold text-rose-500 flex justify-center items-center gap-1"><LogOut className="w-4 h-4"/> 別の合言葉に変更する</button>
             </div>
@@ -445,35 +467,139 @@ export default function App() {
   );
 }
 
-// 暗記カード（単語帳）モードコンポーネント
-function FlashcardView({ questions, onBack }) {
+// ユーザープロフィール一覧（全員のプロフィール）モーダル
+function AllUsersModal({ users, currentUid, onClose }) {
+  const [selectedUser, setSelectedUser] = useState(null);
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="bg-white p-6 rounded-3xl max-w-md w-full shadow-2xl flex flex-col max-h-[85vh]">
+        <div className="flex justify-between items-center border-b pb-3 mb-3">
+          <h3 className="font-extrabold text-xl text-amber-900 flex items-center gap-2">
+            <Users className="w-6 h-6 text-amber-500" /> メンバープロフィール一覧
+          </h3>
+          <span className="text-xs font-bold text-stone-400">{users.length} 名</span>
+        </div>
+
+        <div className="overflow-y-auto pr-1 space-y-3 flex-1">
+          {users.map((u) => {
+            const userBadges = BADGES.filter(b => (u[b.type] || 0) >= b.req);
+            const isMe = u.uid === currentUid;
+
+            return (
+              <div 
+                key={u.uid || u.id} 
+                onClick={() => setSelectedUser(selectedUser?.uid === u.uid ? null : u)}
+                className={`p-4 rounded-2xl border-2 transition cursor-pointer ${isMe ? 'bg-amber-50/80 border-amber-300' : 'bg-stone-50 hover:bg-stone-100 border-stone-200'}`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-2xl shadow-sm border border-stone-200">
+                      {u.avatar || '🎓'}
+                    </div>
+                    <div>
+                      <div className="font-black text-stone-800 text-base flex items-center gap-1.5">
+                        {u.name || '名前未設定'}
+                        {isMe && <span className="bg-amber-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full">あなた</span>}
+                      </div>
+                      <div className="flex items-center gap-2 text-xs font-bold text-stone-500 mt-0.5">
+                        <span className="text-amber-600">Lv.{u.level || 1}</span>
+                        <span>•</span>
+                        <span>{u.xp || 0} XP</span>
+                        {(u.hitCount > 0) && (
+                          <>
+                            <span>•</span>
+                            <span className="text-rose-500 font-black flex items-center gap-0.5">
+                              🎯 的中 {u.hitCount}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <ChevronRight className={`w-5 h-5 text-stone-400 transition-transform ${selectedUser?.uid === u.uid ? 'rotate-90' : ''}`} />
+                </div>
+
+                {/* 詳細表示 (タップで開く) */}
+                {selectedUser?.uid === u.uid && (
+                  <div className="mt-3 pt-3 border-t border-stone-200 space-y-2 animate-fade-in">
+                    <div className="flex justify-between text-xs font-bold text-stone-600">
+                      <span>問題投稿数: <strong className="text-stone-800">{u.totalPosts || 0}</strong></span>
+                      <span>チャット発言: <strong className="text-stone-800">{u.totalChats || 0}</strong></span>
+                    </div>
+
+                    <div>
+                      <div className="text-[11px] font-extrabold text-stone-500 mb-1 flex items-center gap-1">
+                        <Award className="w-3.5 h-3.5 text-yellow-500" /> 獲得バッジ ({userBadges.length}/{BADGES.length})
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {userBadges.length === 0 ? (
+                          <span className="text-[10px] text-stone-400 font-bold">まだバッジを獲得していません</span>
+                        ) : (
+                          userBadges.map(b => (
+                            <span key={b.id} className="bg-white border border-yellow-200 px-2 py-1 rounded-lg text-[10px] font-black text-stone-700 flex items-center gap-1 shadow-2xs">
+                              <span>{b.icon}</span> {b.name}
+                            </span>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="mt-4 pt-3 border-t">
+          <button onClick={onClose} className="w-full bg-amber-500 text-white py-3 rounded-xl text-sm font-extrabold shadow-lg">
+            閉じる
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 暗記カード（単語帳）モードコンポーネント (教科・フォルダ絞り込み対応)
+function FlashcardView({ questions, folders, defaultFolderId, onBack }) {
+  const [selectedSubject, setSelectedSubject] = useState('すべて');
+  const [selectedFolder, setSelectedFolder] = useState(defaultFolderId || 'ALL');
+  
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
   const [learnedMap, setLearnedMap] = useState({});
 
-  if (questions.length === 0) {
-    return (
-      <div className="bg-white p-8 rounded-3xl text-center space-y-4 shadow-md">
-        <p className="text-stone-400 font-bold">暗記カードにする問題がありません</p>
-        <button onClick={onBack} className="bg-amber-500 text-white px-5 py-2 rounded-xl text-sm font-bold">戻る</button>
-      </div>
-    );
-  }
+  // フィルタリング処理
+  const filteredQuestions = questions.filter(q => {
+    const matchSubject = selectedSubject === 'すべて' || q.subject === selectedSubject;
+    const matchFolder = selectedFolder === 'ALL' || q.folderId === selectedFolder;
+    return matchSubject && matchFolder;
+  });
 
-  const currentQ = questions[currentIndex];
-  const total = questions.length;
+  // フィルター変更時にインデックス初期化
+  useEffect(() => {
+    setCurrentIndex(0);
+    setShowAnswer(false);
+  }, [selectedSubject, selectedFolder]);
+
+  const currentQ = filteredQuestions[currentIndex];
+  const total = filteredQuestions.length;
 
   const handleNext = () => {
+    if (total === 0) return;
     setShowAnswer(false);
     setCurrentIndex((prev) => (prev + 1) % total);
   };
 
   const handlePrev = () => {
+    if (total === 0) return;
     setShowAnswer(false);
     setCurrentIndex((prev) => (prev - 1 + total) % total);
   };
 
   const markLearned = (isLearned) => {
+    if (!currentQ) return;
     setLearnedMap({ ...learnedMap, [currentQ.id]: isLearned });
     handleNext();
   };
@@ -481,73 +607,118 @@ function FlashcardView({ questions, onBack }) {
   return (
     <div className="space-y-4 max-w-lg mx-auto w-full">
       <div className="flex items-center justify-between">
-        <button onClick={onBack} className="flex items-center gap-1 text-sm font-extrabold text-stone-600 bg-white border border-stone-200 px-3 py-1.5 rounded-full shadow-sm">
+        <button onClick={onBack} className="flex items-center gap-1 text-sm font-extrabold text-stone-600 bg-white border border-stone-200 px-3 py-1.5 rounded-full shadow-sm hover:bg-stone-50">
           <ArrowLeft className="w-4 h-4" /> 戻る
         </button>
-        <span className="text-xs font-black text-amber-700 bg-amber-100 px-3 py-1 rounded-full">
-          🎴 暗記カード ({currentIndex + 1} / {total})
+        <span className="text-xs font-black text-amber-800 bg-amber-100 px-3 py-1.5 rounded-full flex items-center gap-1 shadow-sm">
+          <Layers className="w-3.5 h-3.5" /> 🎴 暗記カード ({total > 0 ? currentIndex + 1 : 0} / {total})
         </span>
       </div>
 
-      {/* プログレスバー */}
-      <div className="w-full bg-stone-200 h-2 rounded-full overflow-hidden">
-        <div className="bg-amber-500 h-2 transition-all duration-300" style={{ width: `${((currentIndex + 1) / total) * 100}%` }}></div>
-      </div>
-
-      {/* フリップ暗記カード */}
-      <div 
-        onClick={() => setShowAnswer(!showAnswer)}
-        className="bg-white min-h-[260px] p-6 rounded-3xl border-2 border-amber-200 shadow-xl flex flex-col justify-between cursor-pointer transform transition active:scale-98 relative overflow-hidden"
-      >
-        <div className="flex justify-between items-center">
-          <span className="text-[10px] font-black bg-amber-100 text-amber-800 px-2.5 py-1 rounded-md">{currentQ.subject}</span>
-          {learnedMap[currentQ.id] === true && <span className="text-xs font-black text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5"/> 覚えた</span>}
-          {learnedMap[currentQ.id] === false && <span className="text-xs font-black text-rose-600 bg-rose-50 border border-rose-200 px-2.5 py-0.5 rounded-full flex items-center gap-1"><XCircle className="w-3.5 h-3.5"/> もう一回</span>}
+      {/* 絞り込み条件（教科 & フォルダ） */}
+      <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3">
+        <div className="flex items-center gap-1.5 text-xs font-black text-amber-800 border-b pb-2">
+          <Filter className="w-3.5 h-3.5 text-amber-600" /> 出題範囲の選択
         </div>
+        
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="text-[10px] font-bold text-stone-400 mb-1 block">教科</label>
+            <select 
+              value={selectedSubject} 
+              onChange={e => setSelectedSubject(e.target.value)} 
+              className="w-full bg-stone-50 border border-stone-200 p-2 rounded-xl text-xs font-bold outline-none text-stone-700"
+            >
+              <option value="すべて">📚 すべての教科</option>
+              {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
 
-        <div className="my-6 text-center space-y-3">
-          <p className="text-xs font-bold text-amber-600 tracking-wider">
-            {showAnswer ? '【 解答 】' : '【 問題（タップで答えを表示） 】'}
-          </p>
-          <div className="text-lg font-black text-stone-800 leading-relaxed">
-            {showAnswer ? (
-              <span className="text-rose-600 bg-rose-50 px-3 py-1 rounded-xl border border-rose-100 inline-block">
-                {currentQ.subQuestions?.[0]?.answer || '解答なし'}
-              </span>
-            ) : (
-              <span>{currentQ.subQuestions?.[0]?.question || '無題'}</span>
-            )}
+          <div>
+            <label className="text-[10px] font-bold text-stone-400 mb-1 block">フォルダ</label>
+            <select 
+              value={selectedFolder} 
+              onChange={e => setSelectedFolder(e.target.value)} 
+              className="w-full bg-stone-50 border border-stone-200 p-2 rounded-xl text-xs font-bold outline-none text-stone-700"
+            >
+              <option value="ALL">📁 すべてのフォルダ</option>
+              {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+            </select>
           </div>
         </div>
-
-        <p className="text-[10px] text-center font-bold text-stone-400">
-          💡 カードをタップして裏返す
-        </p>
       </div>
 
-      {/* 操作アクションボタン */}
-      <div className="flex gap-2">
-        <button onClick={() => markLearned(false)} className="flex-1 bg-rose-100 hover:bg-rose-200 text-rose-700 py-3 rounded-2xl font-black text-xs flex items-center justify-center gap-1 transition">
-          <XCircle className="w-4 h-4"/> もう一回
-        </button>
-        <button onClick={() => markLearned(true)} className="flex-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 py-3 rounded-2xl font-black text-xs flex items-center justify-center gap-1 transition">
-          <CheckCircle2 className="w-4 h-4"/> 覚えた！
-        </button>
+      {/* プログレスバー */}
+      <div className="w-full bg-stone-200 h-2.5 rounded-full overflow-hidden p-0.5 border">
+        <div 
+          className="bg-gradient-to-r from-amber-400 to-orange-500 h-1.5 rounded-full transition-all duration-300" 
+          style={{ width: `${total > 0 ? ((currentIndex + 1) / total) * 100 : 0}%` }}
+        ></div>
       </div>
 
-      <div className="flex justify-between gap-2 pt-2">
-        <button onClick={handlePrev} className="flex-1 bg-white border border-stone-200 text-stone-600 py-2.5 rounded-xl font-bold text-xs shadow-sm">
-          ◀ 前の問題
-        </button>
-        <button onClick={handleNext} className="flex-1 bg-amber-500 text-white py-2.5 rounded-xl font-bold text-xs shadow-md">
-          次の問題 ▶
-        </button>
-      </div>
+      {/* 暗記カード本体 */}
+      {total === 0 ? (
+        <div className="bg-white p-10 rounded-3xl text-center space-y-3 shadow-md border border-dashed border-stone-300">
+          <p className="text-stone-400 font-extrabold text-sm">選択した範囲に問題がありません</p>
+          <p className="text-xs text-stone-400">教科やフォルダの選択を変更してみてください</p>
+        </div>
+      ) : (
+        <>
+          <div 
+            onClick={() => setShowAnswer(!showAnswer)}
+            className="bg-white min-h-[260px] p-6 rounded-3xl border-2 border-amber-200 shadow-xl flex flex-col justify-between cursor-pointer transform transition active:scale-98 relative overflow-hidden"
+          >
+            <div className="flex justify-between items-center">
+              <span className="text-[10px] font-black bg-amber-100 text-amber-800 px-2.5 py-1 rounded-md">{currentQ.subject}</span>
+              {learnedMap[currentQ.id] === true && <span className="text-xs font-black text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5"/> 覚えた</span>}
+              {learnedMap[currentQ.id] === false && <span className="text-xs font-black text-rose-600 bg-rose-50 border border-rose-200 px-2.5 py-0.5 rounded-full flex items-center gap-1"><XCircle className="w-3.5 h-3.5"/> もう一回</span>}
+            </div>
+
+            <div className="my-6 text-center space-y-3">
+              <p className="text-xs font-bold text-amber-600 tracking-wider">
+                {showAnswer ? '【 解答 】' : '【 問題（タップで答えを表示） 】'}
+              </p>
+              <div className="text-lg font-black text-stone-800 leading-relaxed">
+                {showAnswer ? (
+                  <span className="text-rose-600 bg-rose-50 px-3 py-1.5 rounded-xl border border-rose-100 inline-block">
+                    {currentQ.subQuestions?.[0]?.answer || '解答なし'}
+                  </span>
+                ) : (
+                  <span>{currentQ.subQuestions?.[0]?.question || '無題'}</span>
+                )}
+              </div>
+            </div>
+
+            <p className="text-[10px] text-center font-bold text-stone-400">
+              💡 カードをタップして裏返す
+            </p>
+          </div>
+
+          {/* 操作アクションボタン */}
+          <div className="flex gap-2">
+            <button onClick={() => markLearned(false)} className="flex-1 bg-rose-100 hover:bg-rose-200 text-rose-700 py-3 rounded-2xl font-black text-xs flex items-center justify-center gap-1 transition active:scale-95">
+              <XCircle className="w-4 h-4"/> もう一回
+            </button>
+            <button onClick={() => markLearned(true)} className="flex-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 py-3 rounded-2xl font-black text-xs flex items-center justify-center gap-1 transition active:scale-95">
+              <CheckCircle2 className="w-4 h-4"/> 覚えた！
+            </button>
+          </div>
+
+          <div className="flex justify-between gap-2 pt-1">
+            <button onClick={handlePrev} className="flex-1 bg-white border border-stone-200 text-stone-600 py-2.5 rounded-xl font-bold text-xs shadow-sm hover:bg-stone-50">
+              ◀ 前の問題
+            </button>
+            <button onClick={handleNext} className="flex-1 bg-amber-500 hover:bg-amber-600 text-white py-2.5 rounded-xl font-bold text-xs shadow-md">
+              次の問題 ▶
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
-// ホーム表示コンポーネント（単語帳モード切り替え機能付き）
+// ホーム表示コンポーネント
 function HomeView({ folders, questions, onSelectQuestion, onOpenFolderModal, onToggleLike, secretCode, selectedFolderId, onSelectFolder, onOpenQr }) {
   const [sortBy, setSortBy] = useState('newest');
   const [isFlashcardMode, setIsFlashcardMode] = useState(false);
@@ -563,7 +734,7 @@ function HomeView({ folders, questions, onSelectQuestion, onOpenFolderModal, onT
   });
 
   if (isFlashcardMode) {
-    return <FlashcardView questions={displayQuestions} onBack={() => setIsFlashcardMode(false)} />;
+    return <FlashcardView questions={questions} folders={folders} defaultFolderId={selectedFolderId} onBack={() => setIsFlashcardMode(false)} />;
   }
 
   return (
@@ -795,10 +966,16 @@ function NavButton({ active, icon, label, onClick }) {
   );
 }
 
-function RankingView({ leaderboard, currentUid }) {
+function RankingView({ leaderboard, currentUid, onOpenMembers }) {
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-extrabold text-stone-700 flex items-center gap-2"><Trophy className="w-6 h-6 text-yellow-500" /> グループ内ランキング</h2>
+      <div className="flex justify-between items-center">
+        <h2 className="text-xl font-extrabold text-stone-700 flex items-center gap-2"><Trophy className="w-6 h-6 text-yellow-500" /> グループ内ランキング</h2>
+        <button onClick={onOpenMembers} className="bg-amber-100 hover:bg-amber-200 text-amber-800 px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1 shadow-xs">
+          <Users className="w-3.5 h-3.5" /> 全員の一覧
+        </button>
+      </div>
+
       <div className="bg-white rounded-3xl p-4 shadow-lg border border-amber-100 space-y-3">
         {leaderboard.length === 0 && <p className="text-stone-400 text-sm font-bold text-center py-4">データがありません</p>}
         {leaderboard.map((user, index) => (
