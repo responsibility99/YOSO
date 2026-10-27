@@ -14,7 +14,6 @@ import BossBattle, { INITIAL_BOSSES, SUBJECTS } from './components/BossBattle';
 import QuestionDetailView, { FlashcardView } from './components/QuestionDetailView';
 import UserProfileModal from './components/UserProfileModal';
 import FolderAndHitManager from './components/FolderAndHitManager';
-
 const ADMIN_PASSWORD = 'admin123';
 
 const BADGES = [
