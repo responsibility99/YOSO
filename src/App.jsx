@@ -4,13 +4,16 @@ import {
   Home, PlusCircle, ArrowLeft, Trash2, Calendar, Sparkles,
   MessageCircle, Send, Trophy, Medal, Flame, KeyRound, LogOut,
   ImagePlus, X, HelpCircle, Edit, QrCode, Share2, Target, PartyPopper,
-  ArrowUpDown, History, Rocket
+  ArrowUpDown, History, ShieldCheck, Plus
 } from 'lucide-react';
 import { db } from './firebase';
 import { 
   collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, serverTimestamp, setDoc, query, orderBy
 } from 'firebase/firestore';
 import './index.css';
+
+// 管理者モード解除用の秘密のパスワード（お好きな文字に変更可能です）
+const ADMIN_PASSWORD = 'admin123';
 
 const SUBJECTS = [
   '国語1', '国語２a', '国語２ｂ', '歴史', '地理', 
@@ -28,14 +31,6 @@ const BADGES = [
   { id: 'h1', icon: '🎯', name: '神予想屋', desc: '的中した問題がある', type: 'hitCount', req: 1 },
 ];
 
-// アプリのアップデート履歴データ
-const APP_HISTORY = [
-  { version: 'v3.0', date: '2025/02', title: '🎯 テスト的中報告＆ソート機能', desc: 'テストで出た問題を報告する「神予想システム」と問題の並び替え・アップデート歴史画面を追加！' },
-  { version: 'v2.5', date: '2025/02', title: '📷 チャット画像送信＆QR招待', desc: '合言葉共有用のQRコード表示と、チャットでの画像添付機能に対応。' },
-  { version: 'v2.0', date: '2025/02', title: '🏆 予想屋XP＆レベル機能', desc: '投稿やチャットでXPを獲得してレベルアップするゲーム要素を導入。' },
-  { version: 'v1.0', date: '2025/01', title: '🚀 YOSO アプリ誕生！', desc: '合言葉でつながる予想問題共有アプリとしてスタート。' },
-];
-
 export default function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [selectedFolderId, setSelectedFolderId] = useState(null);
@@ -49,6 +44,7 @@ export default function App() {
       xp: 0, level: 1, totalPosts: 0, totalChats: 0, hitCount: 0, secretCode: '' 
     };
   });
+
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
@@ -61,6 +57,10 @@ export default function App() {
   const [showFolderModal, setShowFolderModal] = useState(false);
   const [questions, setQuestions] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
+  
+  // アプリの歴史用データと管理者フラグ
+  const [historyList, setHistoryList] = useState([]);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const [hitAnnouncement, setHitAnnouncement] = useState(null);
 
@@ -101,6 +101,16 @@ export default function App() {
     });
     return () => unsub();
   }, [userProfile.secretCode]);
+
+  // アプリの歴史データを取得
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'app_history'), (snapshot) => {
+      const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      data.sort((a, b) => (b.order || 0) - (a.order || 0));
+      setHistoryList(data);
+    });
+    return () => unsub();
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('study_app_user_v6', JSON.stringify(userProfile));
@@ -302,31 +312,22 @@ export default function App() {
         <NavButton active={activeTab === 'ranking'} icon={<Trophy className="w-6 h-6" />} label="ランキング" onClick={() => { setActiveTab('ranking'); setSelectedQuestionId(null); }} />
       </nav>
 
-      {/* アプリの歴史モーダル */}
+      {/* アプリの歴史モーダル（管理者機能付き） */}
       {showHistoryModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white p-6 rounded-3xl max-w-sm w-full shadow-2xl flex flex-col max-h-[85vh]">
-            <h3 className="font-extrabold text-xl text-center text-purple-900 border-b pb-3 mb-4 flex items-center justify-center gap-2">
-              <History className="w-6 h-6 text-purple-600" /> アプリの歴史
-            </h3>
-            <div className="overflow-y-auto pr-2 space-y-4 flex-1">
-              {APP_HISTORY.map((item, index) => (
-                <div key={index} className="relative pl-6 border-l-2 border-purple-200 pb-2">
-                  <div className="absolute -left-2 top-0 w-3.5 h-3.5 bg-purple-500 rounded-full border-2 border-white"></div>
-                  <div className="flex items-center justify-between text-xs font-black text-purple-600 mb-1">
-                    <span>{item.version}</span>
-                    <span className="text-stone-400 font-bold">{item.date}</span>
-                  </div>
-                  <h4 className="font-extrabold text-sm text-stone-800 mb-1">{item.title}</h4>
-                  <p className="text-xs text-stone-500 font-bold">{item.desc}</p>
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 pt-3 border-t">
-              <button onClick={() => setShowHistoryModal(false)} className="w-full bg-purple-600 text-white py-3 rounded-xl text-sm font-extrabold shadow-lg">閉じる</button>
-            </div>
-          </div>
-        </div>
+        <HistoryModal 
+          historyList={historyList} 
+          isAdmin={isAdmin} 
+          onClose={() => setShowHistoryModal(false)} 
+          onUnlockAdmin={() => {
+            const pwd = window.prompt('管理者パスワードを入力してください:');
+            if (pwd === ADMIN_PASSWORD) {
+              setIsAdmin(true);
+              alert('管理者モードが有効化されました！歴史の追加・削除ができます。');
+            } else if (pwd !== null) {
+              alert('パスワードが違います。');
+            }
+          }}
+        />
       )}
 
       {/* QRコード招待モーダル */}
@@ -438,6 +439,101 @@ export default function App() {
           </form>
         </div>
       )}
+    </div>
+  );
+}
+
+// 歴史表示＆管理モーダル
+function HistoryModal({ historyList, isAdmin, onClose, onUnlockAdmin }) {
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [version, setVersion] = useState('');
+  const [date, setDate] = useState('');
+  const [title, setTitle] = useState('');
+  const [desc, setDesc] = useState('');
+
+  const handleAddHistory = async (e) => {
+    e.preventDefault();
+    if (!version || !title) return;
+    try {
+      await addDoc(collection(db, 'app_history'), {
+        version, date, title, desc, order: Date.now()
+      });
+      setVersion('');
+      setDate('');
+      setTitle('');
+      setDesc('');
+      setShowAddForm(false);
+    } catch (err) { alert('追加に失敗しました'); }
+  };
+
+  const handleDeleteHistory = async (id) => {
+    if (window.confirm('この歴史項目を削除しますか？')) {
+      try {
+        await deleteDoc(doc(db, 'app_history', id));
+      } catch (err) { alert('削除に失敗しました'); }
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="bg-white p-6 rounded-3xl max-w-sm w-full shadow-2xl flex flex-col max-h-[85vh]">
+        <div className="flex justify-between items-center border-b pb-3 mb-4">
+          <h3 className="font-extrabold text-xl text-purple-900 flex items-center gap-2">
+            <History className="w-6 h-6 text-purple-600" /> アプリの歴史
+          </h3>
+          {isAdmin && <span className="bg-purple-100 text-purple-800 text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1"><ShieldCheck className="w-3 h-3"/> 管理者</span>}
+        </div>
+
+        <div className="overflow-y-auto pr-2 space-y-4 flex-1">
+          {isAdmin && (
+            <button onClick={() => setShowAddForm(!showAddForm)} className="w-full bg-purple-50 hover:bg-purple-100 text-purple-700 py-2 rounded-xl text-xs font-extrabold border border-purple-200 flex items-center justify-center gap-1 transition">
+              <Plus className="w-4 h-4"/> {showAddForm ? 'フォームを閉じる' : '新しい歴史を追加'}
+            </button>
+          )}
+
+          {showAddForm && (
+            <form onSubmit={handleAddHistory} className="bg-purple-50 p-3 rounded-2xl space-y-2 border border-purple-200 text-xs font-bold">
+              <input type="text" placeholder="バージョン (例: v3.0)" required value={version} onChange={e => setVersion(e.target.value)} className="w-full p-2 border rounded-lg bg-white" />
+              <input type="text" placeholder="日付 (例: 2026/02)" required value={date} onChange={e => setDate(e.target.value)} className="w-full p-2 border rounded-lg bg-white" />
+              <input type="text" placeholder="タイトル" required value={title} onChange={e => setTitle(e.target.value)} className="w-full p-2 border rounded-lg bg-white" />
+              <textarea placeholder="詳細説明" value={desc} onChange={e => setDesc(e.target.value)} className="w-full p-2 border rounded-lg bg-white" rows="2" />
+              <button type="submit" className="w-full bg-purple-600 text-white py-2 rounded-lg font-extrabold">投稿</button>
+            </form>
+          )}
+
+          {historyList.length === 0 ? (
+            <p className="text-center text-xs font-bold text-stone-400 py-6">歴史データがまだありません</p>
+          ) : (
+            historyList.map((item) => (
+              <div key={item.id} className="relative pl-6 border-l-2 border-purple-200 pb-2 group">
+                <div className="absolute -left-2 top-0 w-3.5 h-3.5 bg-purple-500 rounded-full border-2 border-white"></div>
+                <div className="flex items-center justify-between text-xs font-black text-purple-600 mb-1">
+                  <span>{item.version}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-stone-400 font-bold">{item.date}</span>
+                    {isAdmin && (
+                      <button onClick={() => handleDeleteHistory(item.id)} className="text-rose-500 hover:text-rose-700">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <h4 className="font-extrabold text-sm text-stone-800 mb-1">{item.title}</h4>
+                <p className="text-xs text-stone-500 font-bold">{item.desc}</p>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="mt-4 pt-3 border-t flex items-center justify-between gap-2">
+          {!isAdmin ? (
+            <button onClick={onUnlockAdmin} className="text-[10px] font-bold text-stone-400 hover:text-purple-600 underline">
+              🔑 管理者
+            </button>
+          ) : <span className="text-[10px] font-bold text-purple-600">管理者モード中</span>}
+          <button onClick={onClose} className="bg-purple-600 text-white px-6 py-2.5 rounded-xl text-sm font-extrabold shadow-lg">閉じる</button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -740,12 +836,11 @@ function HomeView({ folders, questions, onSelectQuestion, onOpenFolderModal, onT
   let rawQuestions = selectedFolderId ? questions.filter(q => q.folderId === selectedFolderId) : questions;
   const selectedFolder = folders.find(f => f.id === selectedFolderId);
 
-  // 並び替えロジック
   const displayQuestions = [...rawQuestions].sort((a, b) => {
     if (sortBy === 'hit') return (b.hitCount || 0) - (a.hitCount || 0);
     if (sortBy === 'likes') return (b.likes || 0) - (a.likes || 0);
     if (sortBy === 'comments') return (b.comments?.length || 0) - (a.comments?.length || 0);
-    return 0; // デフォルト（新着順）
+    return 0;
   });
 
   return (
@@ -780,7 +875,6 @@ function HomeView({ folders, questions, onSelectQuestion, onOpenFolderModal, onT
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-extrabold text-stone-700 flex items-center gap-2"><Sparkles className="w-5 h-5 text-orange-400" /> {selectedFolderId ? 'フォルダ内の問題' : 'すべての予想問題'}</h2>
           
-          {/* 並び替えセレクトボックス */}
           <div className="flex items-center gap-1 bg-white border border-stone-200 px-3 py-1.5 rounded-xl shadow-sm">
             <ArrowUpDown className="w-3.5 h-3.5 text-stone-400" />
             <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="text-xs font-extrabold text-stone-700 bg-transparent outline-none cursor-pointer">
