@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Home, PlusCircle, MessageCircle, Trophy, LogOut,
-  QrCode, HelpCircle, History, Users, Menu, X, Send, BookOpen, Calendar, Plus, Trash2
+  QrCode, HelpCircle, History, Users, Menu, X, Send, BookOpen, Calendar, Plus, Trash2, Edit, ShieldAlert, Check
 } from 'lucide-react';
 import { db } from './firebase';
 import { 
-  collection, onSnapshot, addDoc, doc, updateDoc, serverTimestamp, setDoc, query, orderBy
+  collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, serverTimestamp, setDoc, query, orderBy
 } from 'firebase/firestore';
 import './index.css';
 
@@ -49,10 +49,11 @@ export default function App() {
   const [showMenuDrawer, setShowMenuDrawer] = useState(false);
   const [tempCode, setTempCode] = useState('');
 
-  // 歴史投稿用フォーム状態 (管理者)
+  // 歴史編集・投稿用状態 (管理者)
   const [histVersion, setHistVersion] = useState('');
   const [histTitle, setHistTitle] = useState('');
   const [histDesc, setHistDesc] = useState('');
+  const [editingHistId, setEditingHistId] = useState(null);
 
   const [folders, setFolders] = useState([]);
   const [questions, setQuestions] = useState([]);
@@ -87,7 +88,7 @@ export default function App() {
       
       const me = groupUsers.find(u => u.uid === userProfile.uid);
       if (me && me.isKicked) {
-        alert('このグループから退去処理されました。');
+        alert('管理者によってこのグループから退去処理されました。');
         setUserProfile(prev => ({ ...prev, secretCode: '' }));
       }
       setLeaderboard(groupUsers.slice(0, 30));
@@ -121,34 +122,60 @@ export default function App() {
     });
   };
 
-  const handleKickUser = async (targetUid) => {
+  // 荒らしユーザー追放処理 (管理者)
+  const handleKickUser = async (targetUid, targetName) => {
     if (!isAdmin) return;
-    if (window.confirm('このユーザーを追放しますか？')) {
+    if (window.confirm(`「${targetName}」をグループから追放（BAN）しますか？`)) {
       try {
         await updateDoc(doc(db, 'users', targetUid), { isKicked: true });
         alert('追放しました');
-      } catch (err) {}
+      } catch (err) {
+        alert('追放に失敗しました');
+      }
     }
   };
 
-  // アプリの歴史投稿 (管理者)
-  const handleAddHistory = async (e) => {
+  // アプリの歴史の新規追加 ＆ 編集保存 (管理者)
+  const handleSaveHistory = async (e) => {
     e.preventDefault();
     if (!histTitle.trim()) return;
+
     try {
-      await addDoc(collection(db, 'app_history'), {
-        version: histVersion || 'v1.0',
-        title: histTitle,
-        desc: histDesc,
-        date: new Date().toLocaleDateString('ja-JP'),
-        order: Date.now()
-      });
+      if (editingHistId) {
+        await updateDoc(doc(db, 'app_history', editingHistId), {
+          version: histVersion || 'v1.0',
+          title: histTitle,
+          desc: histDesc
+        });
+        setEditingHistId(null);
+        alert('歴史を更新しました！');
+      } else {
+        await addDoc(collection(db, 'app_history'), {
+          version: histVersion || 'v1.0',
+          title: histTitle,
+          desc: histDesc,
+          date: new Date().toLocaleDateString('ja-JP'),
+          order: Date.now()
+        });
+        alert('新しい歴史を追加しました！');
+      }
       setHistVersion('');
       setHistTitle('');
       setHistDesc('');
-      alert('歴史を追加しました！');
     } catch (err) {
-      alert('投稿に失敗しました');
+      alert('保存に失敗しました');
+    }
+  };
+
+  // アプリの歴史の削除 (管理者)
+  const handleDeleteHistory = async (id) => {
+    if (!isAdmin) return;
+    if (window.confirm('この歴史の項目を削除しますか？')) {
+      try {
+        await deleteDoc(doc(db, 'app_history', id));
+      } catch (err) {
+        alert('削除に失敗しました');
+      }
     }
   };
 
@@ -232,14 +259,24 @@ export default function App() {
 
       {/* メインビュー */}
       <main className="max-w-4xl mx-auto p-4 flex-1 w-full space-y-4">
+        {/* 大型化＆グラフィカルなカウントダウン表示 */}
         {daysLeft !== null && !selectedQuestionId && !isFlashcardMode && (
-          <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white p-3.5 rounded-2xl shadow-md flex justify-between items-center px-4">
-            <div className="flex items-center gap-2 font-black text-xs">
-              <Calendar className="w-4 h-4"/> 次のテスト本番
+          <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white p-5 rounded-3xl shadow-xl border border-amber-300 relative overflow-hidden flex justify-between items-center px-6">
+            <div className="space-y-1">
+              <div className="flex items-center gap-1.5 font-black text-xs text-amber-100">
+                <Calendar className="w-4 h-4 text-amber-200"/> テスト本番まで
+              </div>
+              <div className="text-2xl font-black tracking-tight">
+                {daysLeft > 0 ? (
+                  <span>あと <span className="text-4xl text-yellow-200 font-extrabold">{daysLeft}</span> 日</span>
+                ) : daysLeft === 0 ? (
+                  <span className="text-2xl text-yellow-200">🔥 今日がテスト本番！</span>
+                ) : (
+                  <span>テスト終了</span>
+                )}
+              </div>
             </div>
-            <div className="font-black text-sm">
-              {daysLeft > 0 ? `あと ${daysLeft} 日！` : daysLeft === 0 ? '今日がテスト本番！' : 'テスト終了'}
-            </div>
+            <div className="text-5xl opacity-20">🎯</div>
           </div>
         )}
 
@@ -327,10 +364,16 @@ export default function App() {
         />
       )}
 
+      {/* メンバー一覧（管理者追放BAN機能付き） */}
       {showMemberList && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white p-6 rounded-3xl max-w-sm w-full border border-amber-200 shadow-2xl flex flex-col max-h-[80vh]">
-            <h3 className="font-black text-lg text-stone-800 border-b border-amber-100 pb-3 mb-3 flex items-center gap-2"><Users className="w-5 h-5 text-indigo-500"/> 参加メンバー</h3>
+            <div className="flex justify-between items-center border-b border-amber-100 pb-3 mb-3">
+              <h3 className="font-black text-lg text-stone-800 flex items-center gap-2"><Users className="w-5 h-5 text-indigo-500"/> 参加メンバー</h3>
+              {!isAdmin && (
+                <button onClick={() => { const pwd = window.prompt('管理者パスワード:'); if (pwd === ADMIN_PASSWORD) setIsAdmin(true); }} className="text-[10px] text-stone-400 underline font-bold">🔑 管理者</button>
+              )}
+            </div>
             <div className="overflow-y-auto space-y-2 flex-1 pr-1">
               {leaderboard.map(u => (
                 <div key={u.uid} className="bg-amber-50/50 p-3 rounded-2xl flex items-center justify-between border border-amber-100">
@@ -342,7 +385,9 @@ export default function App() {
                     </div>
                   </div>
                   {isAdmin && u.uid !== userProfile.uid && (
-                    <button onClick={() => handleKickUser(u.uid)} className="text-[10px] font-black bg-rose-100 text-rose-600 border border-rose-200 px-2 py-1 rounded-lg hover:bg-rose-500 hover:text-white transition">追放</button>
+                    <button onClick={() => handleKickUser(u.uid, u.name)} className="text-[10px] font-black bg-rose-500 text-white px-2.5 py-1.5 rounded-xl shadow-sm flex items-center gap-1 hover:bg-rose-600 transition">
+                      <ShieldAlert className="w-3 h-3"/> 追放
+                    </button>
                   )}
                 </div>
               ))}
@@ -352,7 +397,7 @@ export default function App() {
         </div>
       )}
 
-      {/* アプリの歴史モーダル（管理者投稿フォーム追加） */}
+      {/* アプリの歴史（編集＆削除機能付き） */}
       {showHistoryModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white p-6 rounded-3xl max-w-sm w-full border border-amber-200 text-stone-800 space-y-4 max-h-[85vh] flex flex-col shadow-2xl">
@@ -361,21 +406,34 @@ export default function App() {
               {!isAdmin && <button onClick={() => { const pwd = window.prompt('管理者パスワード:'); if (pwd === ADMIN_PASSWORD) setIsAdmin(true); }} className="text-[10px] text-stone-400 underline font-bold">🔑 管理者</button>}
             </div>
 
-            {/* 管理者用投稿フォーム */}
+            {/* 管理者用 投稿・編集フォーム */}
             {isAdmin && (
-              <form onSubmit={handleAddHistory} className="bg-purple-50 p-3 rounded-2xl border border-purple-200 space-y-2 text-xs">
-                <div className="font-extrabold text-purple-800">＋ 新しい歴史を追加 (管理者)</div>
+              <form onSubmit={handleSaveHistory} className="bg-purple-50 p-3 rounded-2xl border border-purple-200 space-y-2 text-xs">
+                <div className="font-extrabold text-purple-800 flex justify-between items-center">
+                  <span>{editingHistId ? '✏️ 歴史の編集' : '＋ 新しい歴史を追加'}</span>
+                  {editingHistId && <button type="button" onClick={() => { setEditingHistId(null); setHistVersion(''); setHistTitle(''); setHistDesc(''); }} className="text-[10px] text-rose-500 underline">キャンセル</button>}
+                </div>
                 <input type="text" placeholder="バージョン (例: v2.1)" value={histVersion} onChange={e => setHistVersion(e.target.value)} className="w-full p-2 bg-white rounded-lg border border-purple-200 text-xs outline-none" />
                 <input type="text" required placeholder="タイトル" value={histTitle} onChange={e => setHistTitle(e.target.value)} className="w-full p-2 bg-white rounded-lg border border-purple-200 text-xs outline-none font-bold" />
-                <textarea placeholder="アップデート内容の詳細" value={histDesc} onChange={e => setHistDesc(e.target.value)} className="w-full p-2 bg-white rounded-lg border border-purple-200 text-xs outline-none" h-16 />
-                <button type="submit" className="w-full bg-purple-600 text-white py-1.5 rounded-lg font-black text-xs shadow-sm">歴史に刻む</button>
+                <textarea placeholder="アップデート内容の詳細" value={histDesc} onChange={e => setHistDesc(e.target.value)} className="w-full p-2 bg-white rounded-lg border border-purple-200 text-xs outline-none h-16" />
+                <button type="submit" className="w-full bg-purple-600 text-white py-1.5 rounded-lg font-black text-xs shadow-sm">
+                  {editingHistId ? '更新を保存' : '歴史に刻む'}
+                </button>
               </form>
             )}
 
             <div className="overflow-y-auto space-y-3 flex-1 pr-1">
               {historyList.map(item => (
-                <div key={item.id} className="border-l-2 border-purple-400 pl-3 py-1 space-y-0.5">
-                  <div className="flex justify-between text-[10px] font-black text-purple-600"><span>{item.version}</span><span>{item.date}</span></div>
+                <div key={item.id} className="border-l-2 border-purple-400 pl-3 py-1 space-y-0.5 relative group">
+                  <div className="flex justify-between items-center text-[10px] font-black text-purple-600">
+                    <span>{item.version} ({item.date})</span>
+                    {isAdmin && (
+                      <div className="flex gap-2">
+                        <button onClick={() => { setEditingHistId(item.id); setHistVersion(item.version || ''); setHistTitle(item.title || ''); setHistDesc(item.desc || ''); }} className="text-indigo-600 font-bold flex items-center gap-0.5"><Edit className="w-3 h-3"/>編集</button>
+                        <button onClick={() => handleDeleteHistory(item.id)} className="text-rose-500 font-bold flex items-center gap-0.5"><Trash2 className="w-3 h-3"/>削除</button>
+                      </div>
+                    )}
+                  </div>
                   <h4 className="font-black text-xs text-stone-800">{item.title}</h4>
                   <p className="text-[10px] text-stone-500 font-bold">{item.desc}</p>
                 </div>
