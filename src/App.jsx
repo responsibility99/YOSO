@@ -111,7 +111,6 @@ export default function App() {
     }
   }, [userProfile]);
 
-  // XP & レベル計算
   const gainXP = (amount, statKey) => {
     setUserProfile(prev => {
       const newXp = (prev.xp || 0) + amount;
@@ -122,7 +121,6 @@ export default function App() {
     });
   };
 
-  // メンバー追放 (管理者)
   const handleKickUser = async (targetUid) => {
     if (!isAdmin) return;
     if (window.confirm('このユーザーを追放しますか？')) {
@@ -135,13 +133,13 @@ export default function App() {
 
   if (!userProfile.secretCode) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
-        <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-2xl max-w-sm w-full text-center space-y-6">
-          <div className="bg-gradient-to-tr from-amber-500 to-orange-500 w-20 h-20 mx-auto rounded-3xl flex items-center justify-center shadow-lg shadow-orange-500/20">
-            <Swords className="w-10 h-10 text-slate-900" />
+      <div className="min-h-screen bg-gradient-to-br from-amber-100 via-orange-100 to-amber-200 flex items-center justify-center p-4">
+        <div className="bg-white/90 backdrop-blur-md p-8 rounded-3xl border border-amber-200 shadow-xl max-w-sm w-full text-center space-y-6">
+          <div className="bg-gradient-to-tr from-amber-400 to-orange-500 w-20 h-20 mx-auto rounded-3xl flex items-center justify-center shadow-lg shadow-orange-500/20">
+            <Swords className="w-10 h-10 text-white animate-bounce" />
           </div>
-          <h1 className="text-2xl font-black text-amber-400">YOSO BATTLE</h1>
-          <p className="text-xs font-bold text-slate-400 leading-relaxed">
+          <h1 className="text-2xl font-black text-amber-600">YOSO BATTLE</h1>
+          <p className="text-xs font-bold text-stone-600 leading-relaxed">
             同じ合言葉を入力して<br/>クラスメイトとバトルを開始しよう！
           </p>
           <form onSubmit={(e) => { e.preventDefault(); if(tempCode.trim()) setUserProfile({...userProfile, secretCode: tempCode.trim()}); }}>
@@ -151,9 +149,9 @@ export default function App() {
               value={tempCode} 
               onChange={e => setTempCode(e.target.value)} 
               placeholder="例: kaisei2026" 
-              className="w-full bg-slate-900 border-2 border-slate-700 focus:border-amber-500 p-4 rounded-2xl text-center text-lg font-black outline-none text-white transition mb-4" 
+              className="w-full bg-amber-50/50 border-2 border-amber-200 focus:border-amber-500 p-4 rounded-2xl text-center text-lg font-black outline-none text-stone-800 transition mb-4 shadow-inner" 
             />
-            <button type="submit" className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-stone-900 py-4 rounded-2xl font-black shadow-lg">
+            <button type="submit" className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white py-4 rounded-2xl font-black shadow-lg shadow-amber-500/30 transition">
               バトルルームに入る
             </button>
           </form>
@@ -163,40 +161,40 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col font-sans pb-24">
-      {/* ヘッダー */}
-      <header className="bg-slate-800/90 backdrop-blur-md sticky top-0 z-30 border-b border-slate-700 px-4 py-3 flex justify-between items-center shadow-md">
+    <div className="min-h-screen bg-gradient-to-b from-amber-50/60 via-orange-50/30 to-amber-100/40 text-stone-800 flex flex-col font-sans pb-24">
+      {/* ポップな明るいヘッダー */}
+      <header className="bg-white/80 backdrop-blur-md sticky top-0 z-30 border-b border-amber-200/60 px-4 py-3 flex justify-between items-center shadow-sm">
         <div className="flex items-center gap-2 cursor-pointer" onClick={() => { setActiveTab('home'); setSelectedQuestionId(null); setIsFlashcardMode(false); }}>
-          <div className="bg-gradient-to-tr from-amber-500 to-orange-500 p-2 rounded-2xl"><Swords className="w-5 h-5 text-stone-900" /></div>
-          <h1 className="font-black text-xl tracking-wider text-amber-400">YOSO BATTLE</h1>
+          <div className="bg-gradient-to-tr from-amber-400 to-orange-500 p-2 rounded-2xl shadow-sm"><Swords className="w-5 h-5 text-white" /></div>
+          <h1 className="font-black text-xl tracking-wider bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">YOSO BATTLE</h1>
         </div>
 
         <div className="flex items-center gap-2">
-          <button onClick={() => setShowProfileModal(true)} className="bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded-full text-xs font-bold border border-slate-600 flex items-center gap-2">
-            <span className="bg-amber-400 text-stone-900 px-2 py-0.5 rounded-full text-[10px] font-black">Lv.{userProfile.level}</span>
+          <button onClick={() => setShowProfileModal(true)} className="bg-amber-100 hover:bg-amber-200 text-amber-900 px-3 py-1.5 rounded-full text-xs font-bold border border-amber-200 flex items-center gap-2 shadow-sm transition">
+            <span className="bg-amber-500 text-white px-2 py-0.5 rounded-full text-[10px] font-black">Lv.{userProfile.level}</span>
             <span className="truncate max-w-[90px]">{userProfile.avatar} {userProfile.name}</span>
           </button>
-          <button onClick={() => setShowMenuDrawer(true)} className="p-2 bg-slate-700 hover:bg-slate-600 rounded-2xl text-slate-200"><Menu className="w-5 h-5" /></button>
+          <button onClick={() => setShowMenuDrawer(true)} className="p-2 bg-amber-100 hover:bg-amber-200 rounded-2xl text-amber-900 transition"><Menu className="w-5 h-5" /></button>
         </div>
       </header>
 
-      {/* スライドメニュー */}
+      {/* ドロワーメニュー */}
       {showMenuDrawer && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex justify-end">
-          <div className="bg-slate-800 w-64 h-full p-6 space-y-6 flex flex-col justify-between border-l border-slate-700 shadow-2xl">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex justify-end">
+          <div className="bg-white w-64 h-full p-6 space-y-6 flex flex-col justify-between border-l border-amber-200 shadow-2xl">
             <div className="space-y-4">
-              <div className="flex justify-between items-center border-b border-slate-700 pb-3">
-                <h3 className="font-extrabold text-sm text-slate-300">メニュー</h3>
-                <button onClick={() => setShowMenuDrawer(false)} className="text-slate-400 hover:text-white"><X className="w-5 h-5"/></button>
+              <div className="flex justify-between items-center border-b border-amber-100 pb-3">
+                <h3 className="font-extrabold text-sm text-stone-700">メニュー</h3>
+                <button onClick={() => setShowMenuDrawer(false)} className="text-stone-400 hover:text-stone-700"><X className="w-5 h-5"/></button>
               </div>
               <div className="space-y-2">
-                <button onClick={() => { setShowQrModal(true); setShowMenuDrawer(false); }} className="w-full text-left p-3 bg-slate-700/50 hover:bg-slate-700 rounded-2xl text-xs font-extrabold flex items-center gap-2 text-orange-400"><QrCode className="w-4 h-4"/> 招待QRを表示</button>
-                <button onClick={() => { setShowMemberList(true); setShowMenuDrawer(false); }} className="w-full text-left p-3 bg-slate-700/50 hover:bg-slate-700 rounded-2xl text-xs font-extrabold flex items-center gap-2 text-indigo-400"><Users className="w-4 h-4"/> メンバー一覧</button>
-                <button onClick={() => { setShowHistoryModal(true); setShowMenuDrawer(false); }} className="w-full text-left p-3 bg-slate-700/50 hover:bg-slate-700 rounded-2xl text-xs font-extrabold flex items-center gap-2 text-purple-400"><History className="w-4 h-4"/> アプリの歴史</button>
-                <button onClick={() => { setShowHelpModal(true); setShowMenuDrawer(false); }} className="w-full text-left p-3 bg-slate-700/50 hover:bg-slate-700 rounded-2xl text-xs font-extrabold flex items-center gap-2 text-amber-400"><HelpCircle className="w-4 h-4"/> 使い方・ルール</button>
+                <button onClick={() => { setShowQrModal(true); setShowMenuDrawer(false); }} className="w-full text-left p-3 bg-amber-50 hover:bg-amber-100 rounded-2xl text-xs font-extrabold flex items-center gap-2 text-orange-600"><QrCode className="w-4 h-4"/> 招待QRを表示</button>
+                <button onClick={() => { setShowMemberList(true); setShowMenuDrawer(false); }} className="w-full text-left p-3 bg-amber-50 hover:bg-amber-100 rounded-2xl text-xs font-extrabold flex items-center gap-2 text-indigo-600"><Users className="w-4 h-4"/> メンバー一覧</button>
+                <button onClick={() => { setShowHistoryModal(true); setShowMenuDrawer(false); }} className="w-full text-left p-3 bg-amber-50 hover:bg-amber-100 rounded-2xl text-xs font-extrabold flex items-center gap-2 text-purple-600"><History className="w-4 h-4"/> アプリの歴史</button>
+                <button onClick={() => { setShowHelpModal(true); setShowMenuDrawer(false); }} className="w-full text-left p-3 bg-amber-50 hover:bg-amber-100 rounded-2xl text-xs font-extrabold flex items-center gap-2 text-amber-600"><HelpCircle className="w-4 h-4"/> 使い方・ルール</button>
               </div>
             </div>
-            <button onClick={() => { if(window.confirm('グループから退出しますか？')) { setUserProfile({...userProfile, secretCode: ''}); setShowMenuDrawer(false); } }} className="w-full py-3 bg-rose-500/20 text-rose-400 rounded-2xl text-xs font-black flex items-center justify-center gap-1 border border-rose-500/30"><LogOut className="w-4 h-4"/> 部屋を出る</button>
+            <button onClick={() => { if(window.confirm('グループから退出しますか？')) { setUserProfile({...userProfile, secretCode: ''}); setShowMenuDrawer(false); } }} className="w-full py-3 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-2xl text-xs font-black flex items-center justify-center gap-1 border border-rose-200"><LogOut className="w-4 h-4"/> 部屋を出る</button>
           </div>
         </div>
       )}
@@ -223,7 +221,6 @@ export default function App() {
           <>
             {activeTab === 'home' && (
               <div className="space-y-6">
-                {/* 1対1 対人バトル (PvP) */}
                 <PvPBattle 
                   leaderboard={leaderboard} 
                   currentUid={userProfile.uid} 
@@ -232,11 +229,10 @@ export default function App() {
                   gainXP={gainXP} 
                 />
                 
-                {/* フォルダ・問題カード管理（完全復元） */}
-                <div className="pt-2 border-t border-slate-800 space-y-3">
+                <div className="pt-2 border-t border-amber-200/60 space-y-3">
                   <div className="flex justify-between items-center">
-                    <h3 className="text-sm font-black text-slate-200">📁 デッキフォルダ & 予想カード一覧</h3>
-                    <button onClick={() => setIsFlashcardMode(true)} className="bg-slate-800 border border-slate-700 text-amber-400 px-3 py-1.5 rounded-xl text-xs font-black hover:bg-slate-700">🎴 単語帳モード</button>
+                    <h3 className="text-sm font-black text-stone-800">📁 デッキフォルダ & 予想カード一覧</h3>
+                    <button onClick={() => setIsFlashcardMode(true)} className="bg-white border border-amber-300 text-amber-600 px-3 py-1.5 rounded-xl text-xs font-black hover:bg-amber-50 shadow-sm">🎴 単語帳モード</button>
                   </div>
                   
                   <FolderAndHitManager 
@@ -258,15 +254,15 @@ export default function App() {
         )}
       </main>
 
-      {/* フッターナビ */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-slate-800/95 backdrop-blur-md border-t border-slate-700 p-2 z-30 flex justify-around shadow-2xl rounded-t-3xl">
+      {/* ボトムナビゲーション */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-amber-200 p-2 z-30 flex justify-around shadow-lg rounded-t-3xl">
         <NavBtn active={activeTab === 'home'} icon={<Home className="w-6 h-6" />} label="バトル" onClick={() => { setActiveTab('home'); setSelectedQuestionId(null); setIsFlashcardMode(false); }} />
         <NavBtn active={activeTab === 'create'} icon={<PlusCircle className="w-6 h-6" />} label="カード作成" onClick={() => { setActiveTab('create'); setSelectedQuestionId(null); setIsFlashcardMode(false); }} />
         <NavBtn active={activeTab === 'chat'} icon={<MessageCircle className="w-6 h-6" />} label="チャット" onClick={() => { setActiveTab('chat'); setSelectedQuestionId(null); setIsFlashcardMode(false); }} />
         <NavBtn active={activeTab === 'ranking'} icon={<Trophy className="w-6 h-6" />} label="順位" onClick={() => { setActiveTab('ranking'); setSelectedQuestionId(null); setIsFlashcardMode(false); }} />
       </nav>
 
-      {/* プロフィール・実績モーダル */}
+      {/* モーダル群 */}
       {showProfileModal && (
         <UserProfileModal 
           userProfile={userProfile} 
@@ -276,73 +272,69 @@ export default function App() {
         />
       )}
 
-      {/* メンバー一覧モーダル */}
       {showMemberList && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-800 p-6 rounded-3xl max-w-sm w-full border border-slate-700 shadow-2xl flex flex-col max-h-[80vh]">
-            <h3 className="font-black text-lg text-slate-100 border-b border-slate-700 pb-3 mb-3 flex items-center gap-2"><Users className="w-5 h-5 text-indigo-400"/> 参加メンバー</h3>
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white p-6 rounded-3xl max-w-sm w-full border border-amber-200 shadow-2xl flex flex-col max-h-[80vh]">
+            <h3 className="font-black text-lg text-stone-800 border-b border-amber-100 pb-3 mb-3 flex items-center gap-2"><Users className="w-5 h-5 text-indigo-500"/> 参加メンバー</h3>
             <div className="overflow-y-auto space-y-2 flex-1 pr-1">
               {leaderboard.map(u => (
-                <div key={u.uid} className="bg-slate-700/50 p-3 rounded-2xl flex items-center justify-between border border-slate-600/50">
+                <div key={u.uid} className="bg-amber-50/50 p-3 rounded-2xl flex items-center justify-between border border-amber-100">
                   <div className="flex items-center gap-2">
                     <span className="text-2xl">{u.avatar || '⚔️'}</span>
                     <div>
-                      <div className="text-xs font-extrabold text-white">{u.name}</div>
-                      <div className="text-[10px] text-amber-400 font-bold">Lv.{u.level || 1} • {u.xp || 0} XP</div>
+                      <div className="text-xs font-extrabold text-stone-800">{u.name}</div>
+                      <div className="text-[10px] text-amber-600 font-bold">Lv.{u.level || 1} • {u.xp || 0} XP</div>
                     </div>
                   </div>
                   {isAdmin && u.uid !== userProfile.uid && (
-                    <button onClick={() => handleKickUser(u.uid)} className="text-[10px] font-black bg-rose-500/20 text-rose-400 border border-rose-500/40 px-2 py-1 rounded-lg hover:bg-rose-500 hover:text-white transition">追放</button>
+                    <button onClick={() => handleKickUser(u.uid)} className="text-[10px] font-black bg-rose-100 text-rose-600 border border-rose-200 px-2 py-1 rounded-lg hover:bg-rose-500 hover:text-white transition">追放</button>
                   )}
                 </div>
               ))}
             </div>
-            <button onClick={() => setShowMemberList(false)} className="mt-4 w-full bg-slate-700 text-slate-200 py-2.5 rounded-xl font-bold text-xs">閉じる</button>
+            <button onClick={() => setShowMemberList(false)} className="mt-4 w-full bg-stone-100 hover:bg-stone-200 text-stone-700 py-2.5 rounded-xl font-bold text-xs">閉じる</button>
           </div>
         </div>
       )}
 
-      {/* アプリの歴史モーダル */}
       {showHistoryModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-800 p-6 rounded-3xl max-w-sm w-full border border-slate-700 text-slate-200 space-y-4 max-h-[80vh] flex flex-col">
-            <div className="flex justify-between items-center border-b border-slate-700 pb-3">
-              <h3 className="font-black text-base text-purple-400">アプリの歴史</h3>
-              {!isAdmin && <button onClick={() => { const pwd = window.prompt('管理者パスワード:'); if (pwd === ADMIN_PASSWORD) setIsAdmin(true); }} className="text-[10px] text-slate-500 underline font-bold">🔑 管理者</button>}
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white p-6 rounded-3xl max-w-sm w-full border border-amber-200 text-stone-800 space-y-4 max-h-[80vh] flex flex-col shadow-2xl">
+            <div className="flex justify-between items-center border-b border-amber-100 pb-3">
+              <h3 className="font-black text-base text-purple-600">アプリの歴史</h3>
+              {!isAdmin && <button onClick={() => { const pwd = window.prompt('管理者パスワード:'); if (pwd === ADMIN_PASSWORD) setIsAdmin(true); }} className="text-[10px] text-stone-400 underline font-bold">🔑 管理者</button>}
             </div>
             <div className="overflow-y-auto space-y-3 flex-1 pr-1">
               {historyList.map(item => (
-                <div key={item.id} className="border-l-2 border-purple-500/50 pl-3 py-1 space-y-0.5">
-                  <div className="flex justify-between text-[10px] font-black text-purple-400"><span>{item.version}</span><span>{item.date}</span></div>
-                  <h4 className="font-black text-xs text-white">{item.title}</h4>
-                  <p className="text-[10px] text-slate-400 font-bold">{item.desc}</p>
+                <div key={item.id} className="border-l-2 border-purple-400 pl-3 py-1 space-y-0.5">
+                  <div className="flex justify-between text-[10px] font-black text-purple-600"><span>{item.version}</span><span>{item.date}</span></div>
+                  <h4 className="font-black text-xs text-stone-800">{item.title}</h4>
+                  <p className="text-[10px] text-stone-500 font-bold">{item.desc}</p>
                 </div>
               ))}
             </div>
-            <button onClick={() => setShowHistoryModal(false)} className="bg-purple-600 text-white w-full py-2.5 rounded-xl font-black text-xs">閉じる</button>
+            <button onClick={() => setShowHistoryModal(false)} className="bg-purple-500 hover:bg-purple-600 text-white w-full py-2.5 rounded-xl font-black text-xs shadow-md">閉じる</button>
           </div>
         </div>
       )}
 
-      {/* QRコードモーダル */}
       {showQrModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-800 p-6 rounded-3xl max-w-sm w-full border border-slate-700 text-center space-y-4 shadow-2xl">
-            <h3 className="font-extrabold text-lg text-amber-400 flex items-center justify-center gap-2"><QrCode className="w-5 h-5"/> 招待QR</h3>
-            <div className="bg-white p-4 rounded-2xl inline-block my-2 shadow-inner"><img src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(userProfile.secretCode)}`} alt="QR" className="w-40 h-40"/></div>
-            <div className="bg-slate-700 px-4 py-2 rounded-xl text-xs font-extrabold text-slate-300 flex justify-between items-center"><span>合言葉:</span><span className="text-amber-400 text-sm font-black">{userProfile.secretCode}</span></div>
-            <button onClick={() => setShowQrModal(false)} className="w-full bg-amber-500 text-stone-900 py-3 rounded-xl font-black text-xs">閉じる</button>
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white p-6 rounded-3xl max-w-sm w-full border border-amber-200 text-center space-y-4 shadow-2xl">
+            <h3 className="font-extrabold text-lg text-amber-600 flex items-center justify-center gap-2"><QrCode className="w-5 h-5"/> 招待QR</h3>
+            <div className="bg-amber-50 p-4 rounded-2xl inline-block my-2 border border-amber-100"><img src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(userProfile.secretCode)}`} alt="QR" className="w-40 h-40"/></div>
+            <div className="bg-amber-100/60 px-4 py-2 rounded-xl text-xs font-extrabold text-stone-700 flex justify-between items-center"><span>合言葉:</span><span className="text-amber-600 text-sm font-black">{userProfile.secretCode}</span></div>
+            <button onClick={() => setShowQrModal(false)} className="w-full bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-xl font-black text-xs shadow-md">閉じる</button>
           </div>
         </div>
       )}
 
-      {/* ヘルプモーダル */}
       {showHelpModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-800 p-6 rounded-3xl max-w-sm w-full border border-slate-700 text-slate-200 shadow-2xl space-y-4">
-            <h3 className="font-black text-lg text-center text-amber-400 border-b border-slate-700 pb-3">遊び方ガイド</h3>
-            <p className="text-xs text-slate-300 leading-relaxed font-bold">1. 同じルームの仲間を選んで 1対1 の対戦バトル！<br/>2. 正解すると攻撃！先に相手のHPを0にしよう！<br/>3. フォルダで問題を整理したり、暗記カードで復習も可能！</p>
-            <button onClick={() => setShowHelpModal(false)} className="w-full bg-amber-500 text-stone-900 py-3 rounded-xl text-xs font-black">閉じる</button>
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white p-6 rounded-3xl max-w-sm w-full border border-amber-200 text-stone-800 shadow-2xl space-y-4">
+            <h3 className="font-black text-lg text-center text-amber-600 border-b border-amber-100 pb-3">遊び方ガイド</h3>
+            <p className="text-xs text-stone-600 leading-relaxed font-bold">1. 同じルームの仲間を選んで 1対1 の対戦バトル！<br/>2. 正解すると攻撃！先に相手のHPを0にしよう！<br/>3. フォルダで問題を整理したり、暗記カードで復習も可能！</p>
+            <button onClick={() => setShowHelpModal(false)} className="w-full bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-xl font-black text-xs shadow-md">閉じる</button>
           </div>
         </div>
       )}
@@ -371,26 +363,26 @@ function CreateCardView({ folders, userProfile, onSuccess }) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-slate-800 p-6 rounded-3xl space-y-4 border border-slate-700 max-w-xl mx-auto shadow-2xl">
-      <h2 className="text-lg font-black text-amber-400 flex items-center gap-2"><PlusCircle className="w-5 h-5"/> 新しいスキルカードを作成</h2>
+    <form onSubmit={handleSubmit} className="bg-white p-6 rounded-3xl space-y-4 border border-amber-200 max-w-xl mx-auto shadow-lg">
+      <h2 className="text-lg font-black text-amber-600 flex items-center gap-2"><PlusCircle className="w-5 h-5"/> 新しいスキルカードを作成</h2>
       
       <div className="grid grid-cols-2 gap-2">
-        <select value={subject} onChange={e => setSubject(e.target.value)} className="bg-slate-900 border border-slate-700 p-3 rounded-xl text-xs font-bold text-white">
+        <select value={subject} onChange={e => setSubject(e.target.value)} className="bg-amber-50/50 border border-amber-200 p-3 rounded-xl text-xs font-bold text-stone-800">
           {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
-        <select value={folderId} onChange={e => setFolderId(e.target.value)} className="bg-slate-900 border border-slate-700 p-3 rounded-xl text-xs font-bold text-white">
+        <select value={folderId} onChange={e => setFolderId(e.target.value)} className="bg-amber-50/50 border border-amber-200 p-3 rounded-xl text-xs font-bold text-stone-800">
           <option value="">フォルダ選択（なし）</option>
           {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
         </select>
       </div>
 
-      <input type="text" required value={question} onChange={e => setQuestion(e.target.value)} placeholder="予想問題を入力..." className="w-full bg-slate-900 border border-slate-700 p-3 rounded-xl text-xs font-bold text-white outline-none" />
-      <input type="text" required value={answer} onChange={e => setAnswer(e.target.value)} placeholder="正解・解説を入力..." className="w-full bg-slate-900 border border-slate-700 p-3 rounded-xl text-xs font-bold text-rose-400 outline-none" />
+      <input type="text" required value={question} onChange={e => setQuestion(e.target.value)} placeholder="予想問題を入力..." className="w-full bg-amber-50/50 border border-amber-200 p-3 rounded-xl text-xs font-bold text-stone-800 outline-none focus:border-amber-500" />
+      <input type="text" required value={answer} onChange={e => setAnswer(e.target.value)} placeholder="正解・解説を入力..." className="w-full bg-amber-50/50 border border-amber-200 p-3 rounded-xl text-xs font-bold text-rose-600 outline-none focus:border-rose-400" />
       <div>
-        <label className="text-[10px] font-bold text-slate-400 block mb-1">カード威力 (ATK): {atk}</label>
-        <input type="range" min="100" max="600" value={atk} onChange={e => setAtk(e.target.value)} className="w-full" />
+        <label className="text-[10px] font-bold text-stone-500 block mb-1">カード威力 (ATK): {atk}</label>
+        <input type="range" min="100" max="600" value={atk} onChange={e => setAtk(e.target.value)} className="w-full accent-amber-500" />
       </div>
-      <button type="submit" className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-stone-900 py-3.5 rounded-xl font-black text-xs shadow-lg">カードを生成する (+50 XP)</button>
+      <button type="submit" className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-white py-3.5 rounded-xl font-black text-xs shadow-md shadow-amber-500/20">カードを生成する (+50 XP)</button>
     </form>
   );
 }
@@ -422,18 +414,18 @@ function ChatView({ userProfile, onMessageSent }) {
 
   return (
     <div className="flex flex-col space-y-3 h-[calc(100vh-160px)]">
-      <h2 className="text-base font-black text-slate-200 flex items-center gap-2"><MessageCircle className="w-5 h-5 text-amber-400"/> 作戦チャット</h2>
-      <div className="flex-1 bg-slate-800 rounded-3xl border border-slate-700 p-4 overflow-y-auto space-y-3 shadow-inner">
+      <h2 className="text-base font-black text-stone-800 flex items-center gap-2"><MessageCircle className="w-5 h-5 text-amber-500"/> 作戦チャット</h2>
+      <div className="flex-1 bg-white rounded-3xl border border-amber-200 p-4 overflow-y-auto space-y-3 shadow-inner">
         {messages.map(msg => (
           <div key={msg.id} className={`flex gap-2 ${msg.uid === userProfile.uid ? 'flex-row-reverse' : 'flex-row'}`}>
             <span className="text-xl">{msg.avatar || '⚔️'}</span>
-            <div className={`p-3 rounded-2xl text-xs font-bold ${msg.uid === userProfile.uid ? 'bg-amber-500 text-stone-900' : 'bg-slate-700 text-slate-200'}`}>{msg.text}</div>
+            <div className={`p-3 rounded-2xl text-xs font-bold ${msg.uid === userProfile.uid ? 'bg-amber-500 text-white shadow-sm' : 'bg-amber-100/70 text-stone-800'}`}>{msg.text}</div>
           </div>
         ))}
       </div>
       <form onSubmit={handleSend} className="flex gap-2">
-        <input type="text" value={newMessage} onChange={e => setNewMessage(e.target.value)} placeholder="作戦を入力..." className="flex-1 bg-slate-800 border border-slate-700 p-3 rounded-2xl text-xs font-bold text-white outline-none" />
-        <button type="submit" className="bg-amber-500 text-stone-900 p-3 rounded-2xl font-black"><Send className="w-4 h-4"/></button>
+        <input type="text" value={newMessage} onChange={e => setNewMessage(e.target.value)} placeholder="作戦を入力..." className="flex-1 bg-white border border-amber-200 p-3 rounded-2xl text-xs font-bold text-stone-800 outline-none focus:border-amber-400 shadow-sm" />
+        <button type="submit" className="bg-amber-500 hover:bg-amber-600 text-white p-3 rounded-2xl font-black shadow-md"><Send className="w-4 h-4"/></button>
       </form>
     </div>
   );
@@ -443,16 +435,16 @@ function ChatView({ userProfile, onMessageSent }) {
 function RankingView({ leaderboard, currentUid }) {
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-black text-slate-200 flex items-center gap-2"><Trophy className="w-5 h-5 text-amber-400"/> 開成予想屋 ランキング</h2>
+      <h2 className="text-lg font-black text-stone-800 flex items-center gap-2"><Trophy className="w-5 h-5 text-amber-500"/> 開成予想屋 ランキング</h2>
       <div className="space-y-2">
         {leaderboard.map((u, i) => (
-          <div key={u.uid} className="bg-slate-800 p-3 rounded-2xl flex items-center justify-between border border-slate-700">
+          <div key={u.uid} className="bg-white p-3.5 rounded-2xl flex items-center justify-between border border-amber-200/80 shadow-sm">
             <div className="flex items-center gap-3">
-              <span className="font-black text-sm text-slate-400">{i+1}</span>
-              <span className="text-xl">{u.avatar || '⚔️'}</span>
-              <div><div className="text-xs font-extrabold text-white">{u.name} {u.uid === currentUid && <span className="text-[9px] bg-amber-500 text-stone-900 px-1.5 py-0.5 rounded-md font-black">あなた</span>}</div><div className="text-[10px] font-bold text-amber-400">Lv.{u.level || 1}</div></div>
+              <span className="font-black text-sm text-stone-400">{i+1}</span>
+              <span className="text-2xl">{u.avatar || '⚔️'}</span>
+              <div><div className="text-xs font-extrabold text-stone-800">{u.name} {u.uid === currentUid && <span className="text-[9px] bg-amber-500 text-white px-1.5 py-0.5 rounded-md font-black">あなた</span>}</div><div className="text-[10px] font-bold text-amber-600">Lv.{u.level || 1}</div></div>
             </div>
-            <span className="text-xs font-black text-slate-300">{u.xp || 0} XP</span>
+            <span className="text-xs font-black text-stone-700">{u.xp || 0} XP</span>
           </div>
         ))}
       </div>
@@ -462,7 +454,7 @@ function RankingView({ leaderboard, currentUid }) {
 
 function NavBtn({ active, icon, label, onClick }) {
   return (
-    <button onClick={onClick} className={`flex flex-col items-center justify-center w-14 h-12 rounded-2xl transition-all ${active ? 'bg-slate-700 text-amber-400 font-black' : 'text-slate-500'}`}>
+    <button onClick={onClick} className={`flex flex-col items-center justify-center w-14 h-12 rounded-2xl transition-all ${active ? 'bg-amber-100 text-amber-600 font-black' : 'text-stone-400'}`}>
       {icon}<span className="text-[9px] mt-0.5">{label}</span>
     </button>
   );
