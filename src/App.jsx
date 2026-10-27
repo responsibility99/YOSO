@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Home, PlusCircle, MessageCircle, Trophy, LogOut,
-  QrCode, HelpCircle, History, Users, Menu, X, Send, BookOpen
+  QrCode, HelpCircle, History, Users, Menu, X, Send, BookOpen, Plus, Trash2
 } from 'lucide-react';
 import { db } from './firebase';
 import { 
@@ -9,7 +9,6 @@ import {
 } from 'firebase/firestore';
 import './index.css';
 
-// 分割コンポーネントの読み込み
 import PvPBattle, { SUBJECTS } from './components/PvPBattle';
 import QuestionDetailView, { FlashcardView } from './components/QuestionDetailView';
 import UserProfileModal from './components/UserProfileModal';
@@ -56,7 +55,6 @@ export default function App() {
   const [historyList, setHistoryList] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // Firestore: フォルダ一覧
   useEffect(() => {
     if (!userProfile.secretCode) return;
     const unsub = onSnapshot(collection(db, 'folders'), (snapshot) => {
@@ -66,7 +64,6 @@ export default function App() {
     return () => unsub();
   }, [userProfile.secretCode]);
 
-  // Firestore: 問題一覧
   useEffect(() => {
     if (!userProfile.secretCode) return;
     const unsub = onSnapshot(collection(db, 'questions'), (snapshot) => {
@@ -76,7 +73,6 @@ export default function App() {
     return () => unsub();
   }, [userProfile.secretCode]);
 
-  // Firestore: ユーザー順位・追放チェック
   useEffect(() => {
     if (!userProfile.secretCode) return;
     const q = query(collection(db, 'users'), orderBy('xp', 'desc'));
@@ -94,7 +90,6 @@ export default function App() {
     return () => unsub();
   }, [userProfile.secretCode, userProfile.uid]);
 
-  // Firestore: アプリの歴史
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'app_history'), (snapshot) => {
       const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -104,7 +99,6 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // ローカル & DB 同期
   useEffect(() => {
     localStorage.setItem('study_app_user_v6', JSON.stringify(userProfile));
     if (userProfile.uid && userProfile.secretCode) {
@@ -141,7 +135,7 @@ export default function App() {
           </div>
           <h1 className="text-2xl font-black text-amber-600">YOSO</h1>
           <p className="text-xs font-bold text-stone-600 leading-relaxed">
-            同じ合言葉を入力して<br/>仲間と問題を共有しよう！
+            同じ合言葉を入力して<br/>仲間と予想問題を共有しよう！
           </p>
           <form onSubmit={(e) => { e.preventDefault(); if(tempCode.trim()) setUserProfile({...userProfile, secretCode: tempCode.trim()}); }}>
             <input 
@@ -216,12 +210,11 @@ export default function App() {
             }}
           />
         ) : isFlashcardMode ? (
-          <FlashcardView questions={questions} onBack={() => setIsFlashcardMode(false)} />
+          <FlashcardView questions={questions} folders={folders} onBack={() => setIsFlashcardMode(false)} />
         ) : (
           <>
             {activeTab === 'home' && (
               <div className="space-y-6">
-                {/* サブ機能：対人バトル切り替え */}
                 {showPvP ? (
                   <div className="space-y-3">
                     <button onClick={() => setShowPvP(false)} className="text-xs font-bold text-amber-600 bg-white border border-amber-200 px-3 py-1 rounded-full shadow-sm">
@@ -269,7 +262,7 @@ export default function App() {
         )}
       </main>
 
-      {/* ボトムナビゲーション */}
+      {/* フッターナビ */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-amber-200 p-2 z-30 flex justify-around shadow-lg rounded-t-3xl">
         <NavBtn active={activeTab === 'home'} icon={<Home className="w-6 h-6" />} label="ホーム" onClick={() => { setActiveTab('home'); setSelectedQuestionId(null); setIsFlashcardMode(false); setShowPvP(false); }} />
         <NavBtn active={activeTab === 'create'} icon={<PlusCircle className="w-6 h-6" />} label="問題作成" onClick={() => { setActiveTab('create'); setSelectedQuestionId(null); setIsFlashcardMode(false); setShowPvP(false); }} />
@@ -357,24 +350,35 @@ export default function App() {
   );
 }
 
-// サブ: 問題作成画面（カード威力は乱数で設定）
+// サブ: 複数問題対応の作成画面
 function CreateCardView({ folders, userProfile, onSuccess }) {
   const [subject, setSubject] = useState(SUBJECTS[0]);
   const [folderId, setFolderId] = useState('');
-  const [question, setQuestion] = useState('');
-  const [answer, setAnswer] = useState('');
+  const [subQuestions, setSubQuestions] = useState([{ question: '', answer: '' }]);
+
+  const handleAddSub = () => {
+    setSubQuestions([...subQuestions, { question: '', answer: '' }]);
+  };
+
+  const handleRemoveSub = (index) => {
+    if (subQuestions.length === 1) return;
+    setSubQuestions(subQuestions.filter((_, i) => i !== index));
+  };
+
+  const handleSubChange = (index, field, value) => {
+    const updated = [...subQuestions];
+    updated[index][field] = value;
+    setSubQuestions(updated);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!question.trim()) return;
-    
-    // カード威力を150〜500の乱数で自動決定
-    const randomAtk = Math.floor(Math.random() * 351) + 150;
+    if (!subQuestions[0].question.trim()) return;
 
     try {
       await addDoc(collection(db, 'questions'), {
         subject, folderId, author: userProfile.name, avatar: userProfile.avatar, uid: userProfile.uid, secretCode: userProfile.secretCode,
-        atk: randomAtk, subQuestions: [{ question, answer }], comments: [], createdAt: new Date().toLocaleDateString('ja-JP')
+        subQuestions, comments: [], createdAt: Date.now()
       });
       onSuccess();
     } catch (err) { alert('作成失敗'); }
@@ -394,10 +398,47 @@ function CreateCardView({ folders, userProfile, onSuccess }) {
         </select>
       </div>
 
-      <input type="text" required value={question} onChange={e => setQuestion(e.target.value)} placeholder="予想問題を入力..." className="w-full bg-amber-50/50 border border-amber-200 p-3 rounded-xl text-xs font-bold text-stone-800 outline-none focus:border-amber-500" />
-      <input type="text" required value={answer} onChange={e => setAnswer(e.target.value)} placeholder="正解・解説を入力..." className="w-full bg-amber-50/50 border border-amber-200 p-3 rounded-xl text-xs font-bold text-rose-600 outline-none focus:border-rose-400" />
-      
-      <button type="submit" className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-white py-3.5 rounded-xl font-black text-xs shadow-md shadow-amber-500/20">問題を投稿する (+50 XP)</button>
+      {/* 複数小問フォーム */}
+      <div className="space-y-3 pt-2">
+        {subQuestions.map((sub, idx) => (
+          <div key={idx} className="p-3 bg-amber-50/40 border border-amber-200 rounded-2xl space-y-2 relative">
+            <div className="flex justify-between items-center text-xs font-bold text-amber-800">
+              <span>小問 {idx + 1}</span>
+              {subQuestions.length > 1 && (
+                <button type="button" onClick={() => handleRemoveSub(idx)} className="text-rose-500 hover:text-rose-700"><Trash2 className="w-4 h-4"/></button>
+              )}
+            </div>
+            <input 
+              type="text" 
+              required 
+              value={sub.question} 
+              onChange={e => handleSubChange(idx, 'question', e.target.value)} 
+              placeholder={`問題 ${idx + 1} を入力...`} 
+              className="w-full bg-white border border-amber-200 p-2.5 rounded-xl text-xs font-bold text-stone-800 outline-none focus:border-amber-400" 
+            />
+            <input 
+              type="text" 
+              required 
+              value={sub.answer} 
+              onChange={e => handleSubChange(idx, 'answer', e.target.value)} 
+              placeholder={`解答 ${idx + 1} を入力...`} 
+              className="w-full bg-white border border-amber-200 p-2.5 rounded-xl text-xs font-bold text-rose-600 outline-none focus:border-rose-400" 
+            />
+          </div>
+        ))}
+
+        <button 
+          type="button" 
+          onClick={handleAddSub} 
+          className="w-full py-2 bg-amber-100 hover:bg-amber-200 text-amber-800 rounded-xl text-xs font-black flex items-center justify-center gap-1 border border-amber-200 transition"
+        >
+          <Plus className="w-4 h-4"/> 小問を追加する
+        </button>
+      </div>
+
+      <button type="submit" className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-white py-3.5 rounded-xl font-black text-xs shadow-md shadow-amber-500/20">
+        投稿する (+50 XP)
+      </button>
     </form>
   );
 }
