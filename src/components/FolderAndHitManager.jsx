@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FolderPlus, Flame, Star, Trash2 } from 'lucide-react';
+import { FolderPlus, Flame, Star, Trash2, Edit } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 
@@ -10,8 +10,10 @@ export default function FolderAndHitManager({
   onSelectFolder,
   onSelectQuestion,
   userProfile,
+  setUserProfile,
   gainXP,
-  onToggleFavorite
+  onToggleFavorite,
+  onEditQuestion
 }) {
   const [newFolderName, setNewFolderName] = useState('');
   const [showCreateFolder, setShowCreateFolder] = useState(false);
@@ -45,18 +47,34 @@ export default function FolderAndHitManager({
     }
   };
 
+  // 「出た！」ボタンの連打防止付きカウントアップ
   const handleHitClick = async (qId, currentHits = 0, e) => {
     e.stopPropagation();
+
+    const hitQIds = userProfile.hitQIds || [];
+    if (hitQIds.includes(qId)) {
+      alert('「出た！」は1つの問題につき1度しか押せません！');
+      return;
+    }
+
     try {
       await updateDoc(doc(db, 'questions', qId), {
         hitCount: (currentHits || 0) + 1
       });
+      
+      // ローカルの押した履歴を更新して連打をブロック
+      setUserProfile(prev => ({
+        ...prev,
+        hitQIds: [...(prev.hitQIds || []), qId]
+      }));
+
       gainXP(10, 'hitCount');
     } catch (err) {
       console.error(err);
     }
   };
 
+  // 問題削除（作成者のみ）
   const handleDeleteQuestion = async (qId, e) => {
     e.stopPropagation();
     if (window.confirm('この問題を削除しますか？')) {
@@ -141,6 +159,7 @@ export default function FolderAndHitManager({
         ) : (
           displayedQuestions.map(q => {
             const isFav = (userProfile.favoriteQIds || []).includes(q.id);
+            const isHit = (userProfile.hitQIds || []).includes(q.id);
             const isAuthor = q.uid === userProfile.uid;
 
             return (
@@ -158,6 +177,7 @@ export default function FolderAndHitManager({
                   </div>
 
                   <div className="flex items-center gap-2">
+                    {/* お気に入りボタン */}
                     <button 
                       onClick={(e) => { e.stopPropagation(); onToggleFavorite(q.id); }} 
                       className="p-1 rounded-full hover:bg-amber-50 transition"
@@ -165,20 +185,38 @@ export default function FolderAndHitManager({
                       <Star className={`w-4 h-4 ${isFav ? 'fill-amber-400 text-amber-400' : 'text-stone-300'}`} />
                     </button>
 
+                    {/* 的中「出た！」ボタン（押すとグレーアウトしてロック） */}
                     <button 
+                      disabled={isHit}
                       onClick={(e) => handleHitClick(q.id, q.hitCount, e)} 
-                      className="bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200 px-2.5 py-1 rounded-xl text-[10px] font-black flex items-center gap-1 transition active:scale-95"
+                      className={`px-2.5 py-1 rounded-xl text-[10px] font-black flex items-center gap-1 transition ${
+                        isHit 
+                          ? 'bg-stone-100 text-stone-400 border border-stone-200 cursor-not-allowed' 
+                          : 'bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200 active:scale-95'
+                      }`}
                     >
-                      <Flame className="w-3.5 h-3.5 text-orange-500 fill-orange-500"/> 出た！({q.hitCount || 0})
+                      <Flame className={`w-3.5 h-3.5 ${isHit ? 'text-stone-400 fill-stone-400' : 'text-orange-500 fill-orange-500'}`}/> 
+                      {isHit ? `的中済み (${q.hitCount || 0})` : `出た！(${q.hitCount || 0})`}
                     </button>
 
+                    {/* 作成者用 編集＆削除ボタン */}
                     {isAuthor && (
-                      <button 
-                        onClick={(e) => handleDeleteQuestion(q.id, e)} 
-                        className="text-stone-400 hover:text-rose-500 p-1 transition"
-                      >
-                        <Trash2 className="w-4 h-4"/>
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); onEditQuestion(q); }} 
+                          className="text-stone-400 hover:text-indigo-600 p-1 transition"
+                          title="問題を編集"
+                        >
+                          <Edit className="w-4 h-4"/>
+                        </button>
+                        <button 
+                          onClick={(e) => handleDeleteQuestion(q.id, e)} 
+                          className="text-stone-400 hover:text-rose-500 p-1 transition"
+                          title="問題を削除"
+                        >
+                          <Trash2 className="w-4 h-4"/>
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
