@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Swords, Check, X, Clock, Zap, Trophy, Filter, ShoppingBag, Shield, Wrench, Sparkles } from 'lucide-react';
+import { Swords, Check, X, Clock, Zap, Trophy, Filter, ShoppingBag, Shield, Wand2, ShieldAlert, Sparkles, Sword } from 'lucide-react';
 import { db } from '../firebase';
 import { doc, updateDoc, onSnapshot, setDoc } from 'firebase/firestore';
 
@@ -21,14 +21,13 @@ export const SUBJECT_ELEMENTS = {
 
 export const SUBJECTS = Object.keys(SUBJECT_ELEMENTS);
 
-// ショップアイテム定義（武器・防具）
 const SHOP_ITEMS = [
-  { id: 'w1', name: '木の剣', type: 'weapon', cost: 100, atkBonus: 20, icon: '🗡️' },
-  { id: 'w2', name: '鋼の太刀', type: 'weapon', cost: 300, atkBonus: 60, icon: '⚔️' },
-  { id: 'w3', name: '聖なる杖', type: 'weapon', cost: 600, atkBonus: 120, icon: '🪄' },
-  { id: 'a1', name: '皮の服', type: 'armor', cost: 100, defBonus: 10, icon: '🛡️' },
-  { id: 'a2', name: '鉄のプレート armor', type: 'armor', cost: 300, defBonus: 30, icon: '🪖' },
-  { id: 'a3', name: '光の盾', type: 'armor', cost: 600, defBonus: 60, icon: '🔰' },
+  { id: 'w1', name: '木彫りの短剣', type: 'weapon', cost: 100, atkBonus: 20, icon: Sword },
+  { id: 'w2', name: '鍛鉄の太刀', type: 'weapon', cost: 300, atkBonus: 60, icon: Swords },
+  { id: 'w3', name: '星詠みの聖杖', type: 'weapon', cost: 600, atkBonus: 120, icon: Wand2 },
+  { id: 'a1', name: '革のプロテクター', type: 'armor', cost: 100, defBonus: 10, icon: Shield },
+  { id: 'a2', name: '重鋼甲冑', type: 'armor', cost: 300, defBonus: 30, icon: ShieldAlert },
+  { id: 'a3', name: '光輝のイージス', type: 'armor', cost: 600, defBonus: 60, icon: Sparkles },
 ];
 
 export default function PvPBattle({ leaderboard, currentUid, questions, userProfile, folders = [], gainXP, setUserProfile }) {
@@ -36,22 +35,18 @@ export default function PvPBattle({ leaderboard, currentUid, questions, userProf
   const [waitingTarget, setWaitingTarget] = useState(null);
   const [showShop, setShowShop] = useState(false);
 
-  // 出題範囲設定
   const [selectedFolderId, setSelectedFolderId] = useState('all');
   const [selectedSubject, setSelectedSubject] = useState('all');
 
-  // バトル内ステート
   const [currentQIndex, setCurrentQIndex] = useState(0);
   const [inputAnswer, setInputAnswer] = useState('');
   const [timeLeft, setTimeLeft] = useState(10);
   const [lastDamageText, setLastDamageText] = useState('');
 
-  // レベルに基づく基礎ステータス計算
   const level = userProfile.level || 1;
-  const maxHp = 1000 + (level * 100); // レベルごとに最大HP +100
-  const baseAtk = level * 10;          // レベルごとに基礎攻撃力 +10
+  const maxHp = 1000 + (level * 100);
+  const baseAtk = level * 10;
 
-  // 装備による補正値
   const equippedWeapon = SHOP_ITEMS.find(i => i.id === userProfile.weaponId);
   const equippedArmor = SHOP_ITEMS.find(i => i.id === userProfile.armorId);
   const totalAtk = baseAtk + (equippedWeapon?.atkBonus || 0);
@@ -89,20 +84,24 @@ export default function PvPBattle({ leaderboard, currentUid, questions, userProf
     return () => clearInterval(timer);
   }, [battleState?.status, currentQIndex, activeQuestions.length]);
 
-  // ショップ購入処理
   const handleBuyItem = (item) => {
     if ((userProfile.xp || 0) < item.cost) {
       alert('XPが足りません！問題作成やチャットでXPを溜めよう。');
       return;
     }
 
-    const key = item.type === 'weapon' ? 'weaponId' : 'armorId';
+    const isWeapon = item.type === 'weapon';
+    const key = isWeapon ? 'weaponId' : 'armorId';
+    const bonusKey = isWeapon ? 'atkBonus' : 'defBonus';
+    const bonusValue = isWeapon ? item.atkBonus : item.defBonus;
+
     setUserProfile(prev => ({
       ...prev,
       xp: prev.xp - item.cost,
-      [key]: item.id
+      [key]: item.id,
+      [bonusKey]: bonusValue
     }));
-    alert(`「${item.name}」を購入し、装備しました！`);
+    alert(`「${item.name}」を購入・装備しました！`);
   };
 
   const handleInvite = async (targetUser) => {
@@ -112,7 +111,6 @@ export default function PvPBattle({ leaderboard, currentUid, questions, userProf
     const folderObj = folders.find(f => f.id === selectedFolderId);
     const rangeName = `${folderObj ? '📁 ' + folderObj.name : '全フォルダ'} / ${selectedSubject !== 'all' ? '📚 ' + selectedSubject : '全教科'}`;
 
-    // 相手の防御補正を取り入れた対戦初期データ
     const initBattleData = {
       battleId: newBattleId,
       status: 'waiting',
@@ -126,6 +124,8 @@ export default function PvPBattle({ leaderboard, currentUid, questions, userProf
       guestName: targetUser.name,
       guestHp: 1000 + ((targetUser.level || 1) * 100),
       guestMaxHp: 1000 + ((targetUser.level || 1) * 100),
+      guestAtk: (targetUser.level || 1) * 10 + (targetUser.atkBonus || 0),
+      guestDef: targetUser.defBonus || 0,
       targetFolderId: selectedFolderId,
       targetSubject: selectedSubject,
       rangeName: rangeName
@@ -165,13 +165,12 @@ export default function PvPBattle({ leaderboard, currentUid, questions, userProf
 
     if (inputAnswer.trim() === correctAnswer.trim()) {
       const speedBonus = timeLeft * 20;
-      // 攻撃力 ＆ 防御力計算
       const rawDamage = 150 + totalAtk + speedBonus;
       const isHost = battleState.role === 'host';
       const opponentDef = isHost ? (battleState.guestDef || 0) : (battleState.hostDef || 0);
-      const finalDamage = Math.max(30, rawDamage - opponentDef); // 最低でも30ダメージ
+      const finalDamage = Math.max(30, rawDamage - opponentDef);
 
-      setLastDamageText(`⚡ クリティカル！ ${finalDamage} ダメージ！（攻撃+${totalAtk}）`);
+      setLastDamageText(`⚡ FAST! ${finalDamage} ダメージ！（攻撃+${totalAtk}）`);
 
       const targetHpKey = isHost ? 'guestHp' : 'hostHp';
       const currentOpponentHp = isHost ? (battleState.guestHp ?? 1000) : (battleState.hostHp ?? 1000);
@@ -215,11 +214,10 @@ export default function PvPBattle({ leaderboard, currentUid, questions, userProf
           className="bg-amber-100 hover:bg-amber-200 text-amber-900 px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1 transition"
         >
           <ShoppingBag className="w-3.5 h-3.5 text-amber-600" />
-          {showShop ? '対戦に戻る' : '装備ショップ (XP)'}
+          {showShop ? '対戦に戻る' : '装備ショップ'}
         </button>
       </div>
 
-      {/* 装備ショップモーダル風表示 */}
       {showShop ? (
         <div className="space-y-4 animate-fade-in">
           <div className="bg-amber-50/80 p-3 rounded-2xl border border-amber-200 flex justify-between items-center text-xs font-black">
@@ -229,11 +227,14 @@ export default function PvPBattle({ leaderboard, currentUid, questions, userProf
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-72 overflow-y-auto pr-1">
             {SHOP_ITEMS.map(item => {
+              const ItemIcon = item.icon;
               const isEquipped = (item.type === 'weapon' && userProfile.weaponId === item.id) || (item.type === 'armor' && userProfile.armorId === item.id);
               return (
                 <div key={item.id} className="bg-white p-3 rounded-2xl border border-amber-200 flex items-center justify-between shadow-sm">
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl">{item.icon}</span>
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 bg-amber-100 text-amber-600 rounded-xl">
+                      <ItemIcon className="w-5 h-5" />
+                    </div>
                     <div>
                       <div className="text-xs font-black text-stone-800">{item.name}</div>
                       <div className="text-[10px] text-stone-500 font-bold">
@@ -258,10 +259,8 @@ export default function PvPBattle({ leaderboard, currentUid, questions, userProf
         </div>
       ) : (
         <>
-          {/* ロビー画面 */}
           {(!battleState || !battleState.status) && (
             <div className="space-y-4">
-              {/* ステータスバー */}
               <div className="bg-gradient-to-r from-amber-100 to-orange-100 p-3 rounded-2xl border border-amber-200 flex justify-around text-center text-xs font-black">
                 <div>
                   <div className="text-[10px] text-stone-500">最大HP</div>
@@ -269,15 +268,14 @@ export default function PvPBattle({ leaderboard, currentUid, questions, userProf
                 </div>
                 <div>
                   <div className="text-[10px] text-stone-500">攻撃力</div>
-                  <div className="text-amber-600">{totalAtk} {equippedWeapon ? `(${equippedWeapon.icon})` : ''}</div>
+                  <div className="text-amber-600">{totalAtk}</div>
                 </div>
                 <div>
                   <div className="text-[10px] text-stone-500">防御力</div>
-                  <div className="text-indigo-600">{totalDef} {equippedArmor ? `(${equippedArmor.icon})` : ''}</div>
+                  <div className="text-indigo-600">{totalDef}</div>
                 </div>
               </div>
 
-              {/* 出題範囲選択 */}
               <div className="bg-amber-50/60 p-3.5 rounded-2xl border border-amber-200 space-y-2">
                 <div className="flex items-center gap-1.5 font-extrabold text-xs text-amber-800">
                   <Filter className="w-4 h-4 text-amber-500" /> 出題範囲を設定
@@ -315,7 +313,13 @@ export default function PvPBattle({ leaderboard, currentUid, questions, userProf
                   leaderboard.filter(u => u.uid !== currentUid).map(u => (
                     <div key={u.uid} className="bg-amber-50/50 p-3 rounded-2xl flex items-center justify-between border border-amber-100">
                       <div className="flex items-center gap-3">
-                        <span className="text-2xl">{u.avatar || '🎓'}</span>
+                        <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center bg-amber-200 text-lg">
+                          {u.customAvatarUrl ? (
+                            <img src={u.customAvatarUrl} alt="avatar" className="w-full h-full object-cover" />
+                          ) : (
+                            <span>{u.avatar || '🎓'}</span>
+                          )}
+                        </div>
                         <div>
                           <div className="text-xs font-black text-stone-800">{u.name}</div>
                           <div className="text-[10px] font-bold text-amber-600">Lv.{u.level || 1} • {u.xp || 0} XP</div>
@@ -334,7 +338,6 @@ export default function PvPBattle({ leaderboard, currentUid, questions, userProf
             </div>
           )}
 
-          {/* 招待確認 */}
           {battleState?.status === 'invited' && (
             <div className="bg-amber-50 border-2 border-amber-300 p-4 rounded-2xl text-center space-y-3 animate-bounce">
               <div className="font-black text-sm text-stone-800">
@@ -354,7 +357,6 @@ export default function PvPBattle({ leaderboard, currentUid, questions, userProf
             </div>
           )}
 
-          {/* 待機中 */}
           {battleState?.status === 'waiting' && (
             <div className="bg-amber-50/80 border border-amber-200 p-6 rounded-2xl text-center space-y-3">
               <Clock className="w-8 h-8 text-amber-500 mx-auto animate-spin" />
@@ -370,7 +372,6 @@ export default function PvPBattle({ leaderboard, currentUid, questions, userProf
             </div>
           )}
 
-          {/* プレイ中 */}
           {battleState?.status === 'playing' && (
             <div className="space-y-4 py-2">
               <div className="grid grid-cols-2 gap-3 bg-amber-50 p-3 rounded-2xl border border-amber-200">
@@ -438,7 +439,6 @@ export default function PvPBattle({ leaderboard, currentUid, questions, userProf
             </div>
           )}
 
-          {/* 終了判定 */}
           {battleState?.status === 'finished' && (
             <div className="bg-amber-50 border-2 border-amber-400 p-6 rounded-2xl text-center space-y-3 shadow-lg">
               <Trophy className="w-12 h-12 text-yellow-500 mx-auto animate-bounce" />
