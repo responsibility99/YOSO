@@ -29,7 +29,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [selectedFolderId, setSelectedFolderId] = useState(null);
   const [selectedQuestionId, setSelectedQuestionId] = useState(null);
-  const [editingQuestion, setEditingQuestion] = useState(null); // 編集対象
+  const [editingQuestion, setEditingQuestion] = useState(null);
   const [isFlashcardMode, setIsFlashcardMode] = useState(false);
   const [showPvP, setShowPvP] = useState(false);
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
@@ -56,7 +56,7 @@ export default function App() {
           atkBonus: parsed.atkBonus || 0,
           defBonus: parsed.defBonus || 0,
           favoriteQIds: Array.isArray(parsed.favoriteQIds) ? parsed.favoriteQIds : [],
-          hitQIds: Array.isArray(parsed.hitQIds) ? parsed.hitQIds : [] // 的中押し済みID
+          hitQIds: Array.isArray(parsed.hitQIds) ? parsed.hitQIds : []
         };
       }
     } catch (e) {
@@ -133,7 +133,7 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // プロフィール変更時にFirebaseとローカル両方を確実に同期
+  // プロフィール更新時のFirebase同期
   useEffect(() => {
     localStorage.setItem('study_app_user_v6', JSON.stringify(userProfile));
     if (userProfile.uid && userProfile.secretCode) {
@@ -326,7 +326,6 @@ export default function App() {
           </div>
         )}
 
-        {/* 編集モード時の画面表示 */}
         {editingQuestion ? (
           <CreateCardView 
             folders={folders} 
@@ -544,7 +543,7 @@ export default function App() {
   );
 }
 
-// 問題の投稿・編集コンポーネント
+// 投稿機能の修正（送信エラー防止）
 function CreateCardView({ folders, userProfile, onSuccess, editData, onCancel }) {
   const [subject, setSubject] = useState(editData ? editData.subject : SUBJECTS[0]);
   const [folderId, setFolderId] = useState(editData ? editData.folderId : '');
@@ -571,7 +570,6 @@ function CreateCardView({ folders, userProfile, onSuccess, editData, onCancel })
 
     try {
       if (editData) {
-        // 更新処理
         await updateDoc(doc(db, 'questions', editData.id), {
           subject,
           folderId,
@@ -579,14 +577,25 @@ function CreateCardView({ folders, userProfile, onSuccess, editData, onCancel })
         });
         alert('問題を更新しました！');
       } else {
-        // 新規追加
         await addDoc(collection(db, 'questions'), {
-          subject, folderId, author: userProfile.name, avatar: userProfile.avatar, customAvatarUrl: userProfile.customAvatarUrl || '', uid: userProfile.uid, secretCode: userProfile.secretCode,
-          subQuestions, comments: [], createdAt: Date.now()
+          subject, 
+          folderId: folderId || '', 
+          author: userProfile.name || '匿名', 
+          avatar: userProfile.avatar || '🎓', 
+          uid: userProfile.uid, 
+          secretCode: userProfile.secretCode,
+          subQuestions, 
+          comments: [], 
+          hitCount: 0,
+          createdAt: Date.now()
         });
+        alert('問題を投稿しました！');
       }
       onSuccess();
-    } catch (err) { alert('保存に失敗しました'); }
+    } catch (err) {
+      console.error(err);
+      alert('投稿失敗: ' + err.message);
+    }
   };
 
   return (
@@ -656,7 +665,6 @@ function CreateCardView({ folders, userProfile, onSuccess, editData, onCancel })
   );
 }
 
-// チャット画面（発言取り消し/削除機能追加）
 function ChatView({ userProfile, leaderboard, onMessageSent }) {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
@@ -686,7 +694,6 @@ function ChatView({ userProfile, leaderboard, onMessageSent }) {
     } catch (err) {}
   };
 
-  // 自分の発言取り消し（削除）
   const handleDeleteChat = async (msgId) => {
     if (window.confirm('この発言を取り消しますか？')) {
       try {
