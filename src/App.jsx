@@ -107,6 +107,7 @@ export default function App() {
     return () => unsub();
   }, [userProfile.secretCode]);
 
+  // リアルタイムでランキングとメンバーリストを同期
   useEffect(() => {
     if (!userProfile.secretCode) return;
     const q = query(collection(db, 'users'), orderBy('xp', 'desc'));
@@ -133,32 +134,33 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // プロフィール更新時のFirebase同期
-  useEffect(() => {
-    localStorage.setItem('study_app_user_v6', JSON.stringify(userProfile));
-    if (userProfile.uid && userProfile.secretCode) {
-      setDoc(doc(db, 'users', userProfile.uid), userProfile, { merge: true }).catch(console.error);
+  // プロフィール変更を確実にFirebaseに送信
+  const updateProfileAndSync = async (newProfile) => {
+    setUserProfile(newProfile);
+    localStorage.setItem('study_app_user_v6', JSON.stringify(newProfile));
+    if (newProfile.uid && newProfile.secretCode) {
+      try {
+        await setDoc(doc(db, 'users', newProfile.uid), newProfile, { merge: true });
+      } catch (err) {
+        console.error('Firebase profile sync error:', err);
+      }
     }
-  }, [userProfile]);
+  };
 
   const gainXP = (amount, statKey) => {
-    setUserProfile(prev => {
-      const newXp = (prev.xp || 0) + amount;
-      const newLevel = Math.floor(newXp / 100) + 1;
-      const updates = { xp: newXp, level: newLevel };
-      if (statKey) updates[statKey] = (prev[statKey] || 0) + 1;
-      return { ...prev, ...updates };
-    });
+    const newXp = (userProfile.xp || 0) + amount;
+    const newLevel = Math.floor(newXp / 100) + 1;
+    const updates = { xp: newXp, level: newLevel };
+    if (statKey) updates[statKey] = (userProfile[statKey] || 0) + 1;
+    updateProfileAndSync({ ...userProfile, ...updates });
   };
 
   const toggleFavorite = (qId) => {
-    setUserProfile(prev => {
-      const favorites = prev.favoriteQIds || [];
-      const updated = favorites.includes(qId) 
-        ? favorites.filter(id => id !== qId) 
-        : [...favorites, qId];
-      return { ...prev, favoriteQIds: updated };
-    });
+    const favorites = userProfile.favoriteQIds || [];
+    const updated = favorites.includes(qId) 
+      ? favorites.filter(id => id !== qId) 
+      : [...favorites, qId];
+    updateProfileAndSync({ ...userProfile, favoriteQIds: updated });
   };
 
   const handleKickUser = async (targetUid, targetName) => {
@@ -240,7 +242,7 @@ export default function App() {
           <p className="text-xs font-bold text-stone-600 leading-relaxed">
             同じ合言葉を入力して<br/>仲間と予想問題を共有しよう！
           </p>
-          <form onSubmit={(e) => { e.preventDefault(); if(tempCode.trim()) setUserProfile({...userProfile, secretCode: tempCode.trim()}); }}>
+          <form onSubmit={(e) => { e.preventDefault(); if(tempCode.trim()) updateProfileAndSync({...userProfile, secretCode: tempCode.trim()}); }}>
             <input 
               type="text" 
               required 
@@ -299,7 +301,7 @@ export default function App() {
                 <button onClick={() => { setShowHelpModal(true); setShowMenuDrawer(false); }} className="w-full text-left p-3 bg-amber-50 hover:bg-amber-100 rounded-2xl text-xs font-extrabold flex items-center gap-2 text-amber-600"><HelpCircle className="w-4 h-4"/> 使い方・ルール</button>
               </div>
             </div>
-            <button onClick={() => { if(window.confirm('グループから退出しますか？')) { setUserProfile({...userProfile, secretCode: ''}); setShowMenuDrawer(false); } }} className="w-full py-3 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-2xl text-xs font-black flex items-center justify-center gap-1 border border-rose-200"><LogOut className="w-4 h-4"/> 部屋を出る</button>
+            <button onClick={() => { if(window.confirm('グループから退出しますか？')) { updateProfileAndSync({...userProfile, secretCode: ''}); setShowMenuDrawer(false); } }} className="w-full py-3 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-2xl text-xs font-black flex items-center justify-center gap-1 border border-rose-200"><LogOut className="w-4 h-4"/> 部屋を出る</button>
           </div>
         </div>
       )}
@@ -365,7 +367,7 @@ export default function App() {
                       userProfile={userProfile} 
                       folders={folders}
                       gainXP={gainXP} 
-                      setUserProfile={setUserProfile}
+                      setUserProfile={updateProfileAndSync}
                     />
                   </div>
                 ) : (
@@ -402,7 +404,7 @@ export default function App() {
                       onSelectFolder={setSelectedFolderId}
                       onSelectQuestion={setSelectedQuestionId}
                       userProfile={userProfile}
-                      setUserProfile={setUserProfile}
+                      setUserProfile={updateProfileAndSync}
                       gainXP={gainXP}
                       onToggleFavorite={toggleFavorite}
                       onEditQuestion={(q) => setEditingQuestion(q)}
@@ -430,7 +432,7 @@ export default function App() {
       {showProfileModal && (
         <UserProfileModal 
           userProfile={userProfile} 
-          setUserProfile={setUserProfile} 
+          setUserProfile={updateProfileAndSync} 
           badges={BADGES} 
           onClose={() => setShowProfileModal(false)} 
         />
@@ -543,7 +545,7 @@ export default function App() {
   );
 }
 
-// 投稿機能の修正（送信エラー防止）
+// 投稿機能（安全化）
 function CreateCardView({ folders, userProfile, onSuccess, editData, onCancel }) {
   const [subject, setSubject] = useState(editData ? editData.subject : SUBJECTS[0]);
   const [folderId, setFolderId] = useState(editData ? editData.folderId : '');
@@ -572,7 +574,7 @@ function CreateCardView({ folders, userProfile, onSuccess, editData, onCancel })
       if (editData) {
         await updateDoc(doc(db, 'questions', editData.id), {
           subject,
-          folderId,
+          folderId: folderId || '',
           subQuestions
         });
         alert('問題を更新しました！');
@@ -750,7 +752,6 @@ function ChatView({ userProfile, leaderboard, onMessageSent }) {
   );
 }
 
-// 戦闘力（Power）順ランキング画面（画像同期完全対応）
 function RankingView({ leaderboard, currentUid }) {
   const sortedByPower = [...leaderboard].map(u => {
     const lvl = u.level || 1;
