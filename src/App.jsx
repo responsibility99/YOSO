@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Swords, Check, X, Clock, Zap, Trophy, Filter, ShoppingBag, Shield, Wand2, ShieldAlert, Sparkles, Sword } from 'lucide-react';
-import { db } from '../firebase';
+import { db } from './firebase';
 import { doc, updateDoc, onSnapshot, setDoc } from 'firebase/firestore';
 
 export const SUBJECT_ELEMENTS = {
