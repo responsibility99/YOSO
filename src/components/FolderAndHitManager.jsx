@@ -1,202 +1,196 @@
 import React, { useState } from 'react';
-import { FolderPlus, ArrowUpDown, X, Folder } from 'lucide-react';
+import { FolderPlus, Flame, Star, Trash2 } from 'lucide-react';
 import { db } from '../firebase';
-import { collection, addDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 
-export default function FolderAndHitManager({ 
-  folders, 
-  questions, 
-  selectedFolderId, 
-  onSelectFolder, 
-  onSelectQuestion, 
-  userProfile, 
-  gainXP 
+export default function FolderAndHitManager({
+  folders,
+  questions,
+  selectedFolderId,
+  onSelectFolder,
+  onSelectQuestion,
+  userProfile,
+  gainXP,
+  onToggleFavorite
 }) {
-  const [showFolderModal, setShowFolderModal] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
-  const [sortMode, setSortMode] = useState('newest');
+  const [showCreateFolder, setShowCreateFolder] = useState(false);
 
   const handleCreateFolder = async (e) => {
     e.preventDefault();
     if (!newFolderName.trim()) return;
     try {
-      await addDoc(collection(db, 'folders'), { 
-        name: newFolderName.trim(), 
-        secretCode: userProfile.secretCode, 
-        createdAt: serverTimestamp() 
+      await addDoc(collection(db, 'folders'), {
+        name: newFolderName.trim(),
+        secretCode: userProfile.secretCode,
+        createdBy: userProfile.uid,
+        createdAt: Date.now()
       });
       setNewFolderName('');
-      setShowFolderModal(false);
+      setShowCreateFolder(false);
     } catch (err) {
-      alert('フォルダ作成に失敗しました');
+      alert('フォルダ作成失敗');
     }
   };
 
-  const handleToggleHit = async (e, q) => {
+  const handleDeleteFolder = async (folderId, e) => {
     e.stopPropagation();
-    
-    const hitBy = q.hitBy || [];
-    const isAlreadyHit = hitBy.includes(userProfile.uid);
-    const newHitBy = isAlreadyHit 
-      ? hitBy.filter(id => id !== userProfile.uid) 
-      : [...hitBy, userProfile.uid];
+    if (window.confirm('このフォルダを削除しますか？')) {
+      try {
+        await deleteDoc(doc(db, 'folders', folderId));
+        if (selectedFolderId === folderId) onSelectFolder(null);
+      } catch (err) {
+        alert('削除失敗');
+      }
+    }
+  };
 
+  const handleHitClick = async (qId, currentHits = 0, e) => {
+    e.stopPropagation();
     try {
-      await updateDoc(doc(db, 'questions', q.id), {
-        hitCount: newHitBy.length,
-        hitBy: newHitBy,
-        lastHitAt: isAlreadyHit ? null : Date.now()
+      await updateDoc(doc(db, 'questions', qId), {
+        hitCount: (currentHits || 0) + 1
       });
-
-      if (!isAlreadyHit) gainXP(15, 'hitCount');
+      gainXP(10, 'hitCount');
     } catch (err) {
       console.error(err);
     }
   };
 
-  let filteredQuestions = selectedFolderId 
-    ? questions.filter(q => q.folderId === selectedFolderId) 
-    : [...questions];
+  const handleDeleteQuestion = async (qId, e) => {
+    e.stopPropagation();
+    if (window.confirm('この問題を削除しますか？')) {
+      try {
+        await deleteDoc(doc(db, 'questions', qId));
+      } catch (err) {
+        alert('問題削除失敗');
+      }
+    }
+  };
 
-  if (sortMode === 'newest') {
-    filteredQuestions.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-  } else if (sortMode === 'hits') {
-    filteredQuestions.sort((a, b) => (b.hitCount || 0) - (a.hitCount || 0));
-  }
+  const displayedQuestions = selectedFolderId
+    ? questions.filter(q => q.folderId === selectedFolderId)
+    : questions;
 
   return (
     <div className="space-y-4">
-      {/* フォルダ一覧 ＆ 作成ボタン ＆ ソート */}
       <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-1 flex-1 pr-2">
-            <button 
-              onClick={() => onSelectFolder(null)} 
-              className={`px-3.5 py-1.5 rounded-full text-xs font-black whitespace-nowrap transition ${
-                selectedFolderId === null 
-                  ? 'bg-amber-500 text-white shadow-sm' 
-                  : 'bg-white text-stone-600 border border-amber-200 hover:bg-amber-50'
-              }`}
-            >
-              すべて ({questions.length})
-            </button>
-
-            {folders.map(f => {
-              const count = questions.filter(q => q.folderId === f.id).length;
-              return (
-                <button 
-                  key={f.id} 
-                  onClick={() => onSelectFolder(f.id)} 
-                  className={`px-3.5 py-1.5 rounded-full text-xs font-black whitespace-nowrap transition ${
-                    selectedFolderId === f.id 
-                      ? 'bg-amber-500 text-white shadow-sm' 
-                      : 'bg-white text-stone-600 border border-amber-200 hover:bg-amber-50'
-                  }`}
-                >
-                  📁 {f.name} ({count})
-                </button>
-              );
-            })}
-          </div>
-
+        <div className="flex justify-between items-center">
+          <span className="text-xs font-black text-stone-600">フォルダ選択</span>
           <button 
-            onClick={() => setSortMode(sortMode === 'newest' ? 'hits' : 'newest')}
-            className="bg-amber-100 hover:bg-amber-200 text-amber-800 px-2.5 py-1.5 rounded-xl text-[11px] font-black flex items-center gap-1 whitespace-nowrap shadow-sm shrink-0"
+            onClick={() => setShowCreateFolder(!showCreateFolder)} 
+            className="text-xs font-bold text-amber-700 bg-amber-100 hover:bg-amber-200 px-2.5 py-1 rounded-xl flex items-center gap-1 transition"
           >
-            <ArrowUpDown className="w-3 h-3"/> {sortMode === 'newest' ? '新着順' : '的中順'}
+            <FolderPlus className="w-3.5 h-3.5"/> 新規フォルダ
           </button>
         </div>
 
-        {/* フォルダ作成ボタン */}
-        <button 
-          onClick={() => setShowFolderModal(true)} 
-          className="w-full bg-white hover:bg-amber-50 text-amber-600 border border-dashed border-amber-300 py-2 rounded-2xl text-xs font-black flex items-center justify-center gap-1 shadow-sm transition"
-        >
-          <FolderPlus className="w-4 h-4" /> ＋ 新しいフォルダを作成する
-        </button>
-      </div>
-
-      {/* 問題一覧 */}
-      <div className="space-y-2.5">
-        {filteredQuestions.length === 0 ? (
-          <div className="text-center py-8 text-stone-400 font-bold text-xs bg-white rounded-3xl border border-amber-200">
-            問題がありません。「問題作成」から新しい問題を投稿しよう！
-          </div>
-        ) : (
-          filteredQuestions.map(q => {
-            const isHitByMe = (q.hitBy || []).includes(userProfile.uid);
-            const hitCount = q.hitCount || 0;
-            const subCount = (q.subQuestions || []).length;
-
-            return (
-              <div 
-                key={q.id} 
-                onClick={() => onSelectQuestion(q.id)}
-                className="bg-white hover:bg-amber-50/50 p-3.5 rounded-2xl border border-amber-200/80 cursor-pointer transition flex items-start justify-between gap-3 shadow-sm"
-              >
-                <div className="space-y-1.5 flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="bg-amber-100 text-amber-800 text-[10px] font-black px-2.5 py-0.5 rounded-full">
-                      {q.subject}
-                    </span>
-                    {subCount > 1 && (
-                      <span className="bg-orange-100 text-orange-700 text-[9px] font-extrabold px-2 py-0.5 rounded-md">
-                        {subCount}問構成
-                      </span>
-                    )}
-                    <span className="text-[10px] font-extrabold text-stone-400">
-                      by {q.author || '匿名'}
-                    </span>
-                  </div>
-                  
-                  <h4 className="font-extrabold text-xs text-stone-800 leading-snug line-clamp-2 break-words">
-                    Q. {q.subQuestions?.[0]?.question || '無題'}
-                  </h4>
-                </div>
-
-                <button 
-                  onClick={(e) => handleToggleHit(e, q)} 
-                  className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1 transition shrink-0 transform active:scale-95 ${
-                    isHitByMe 
-                      ? 'bg-rose-500 text-white shadow-md' 
-                      : 'bg-amber-50 hover:bg-amber-100 text-stone-700 border border-amber-200'
-                  }`}
-                  title="テストに出たら押そう！"
-                >
-                  <span>🎯</span>
-                  <span>{hitCount > 0 ? `${hitCount}` : '出た！'}</span>
-                </button>
-              </div>
-            );
-          })
-        )}
-      </div>
-
-      {/* フォルダ作成モーダル */}
-      {showFolderModal && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <form onSubmit={handleCreateFolder} className="bg-white p-6 rounded-3xl max-w-sm w-full space-y-4 border border-amber-200 shadow-2xl">
-            <div className="flex justify-between items-center border-b border-amber-100 pb-2">
-              <h3 className="font-extrabold text-base text-amber-600 flex items-center gap-1.5">
-                <Folder className="w-4 h-4"/> 新規フォルダ作成
-              </h3>
-              <button type="button" onClick={() => setShowFolderModal(false)} className="text-stone-400 hover:text-stone-700"><X className="w-4 h-4"/></button>
-            </div>
+        {showCreateFolder && (
+          <form onSubmit={handleCreateFolder} className="flex gap-2 bg-white p-2.5 rounded-2xl border border-amber-200">
             <input 
               type="text" 
               required 
               value={newFolderName} 
               onChange={e => setNewFolderName(e.target.value)} 
-              placeholder="例: 期末テスト対策, 数学B" 
-              className="w-full bg-amber-50/50 border border-amber-200 p-3 rounded-xl text-xs font-bold text-stone-800 outline-none focus:border-amber-500 shadow-inner" 
+              placeholder="例: 期末テスト予想" 
+              className="flex-1 bg-amber-50/50 border border-amber-200 px-3 py-1.5 rounded-xl text-xs font-bold outline-none"
             />
-            <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setShowFolderModal(false)} className="px-4 py-2 text-xs font-bold text-stone-500">キャンセル</button>
-              <button type="submit" className="bg-gradient-to-r from-amber-500 to-orange-500 text-white px-5 py-2 rounded-xl text-xs font-black shadow-md">作成</button>
-            </div>
+            <button type="submit" className="bg-amber-500 text-white px-3 py-1.5 rounded-xl text-xs font-black">
+              追加
+            </button>
           </form>
+        )}
+
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          <button 
+            onClick={() => onSelectFolder(null)} 
+            className={`px-3.5 py-2 rounded-2xl text-xs font-black whitespace-nowrap border transition ${
+              selectedFolderId === null ? 'bg-amber-500 text-white border-amber-500 shadow-md' : 'bg-white text-stone-700 border-amber-200'
+            }`}
+          >
+            すべて ({questions.length})
+          </button>
+          {folders.map(f => {
+            const isSelected = selectedFolderId === f.id;
+            const canDelete = f.createdBy === userProfile.uid;
+            return (
+              <div 
+                key={f.id} 
+                onClick={() => onSelectFolder(f.id)} 
+                className={`px-3.5 py-2 rounded-2xl text-xs font-black whitespace-nowrap border flex items-center gap-1.5 cursor-pointer transition ${
+                  isSelected ? 'bg-amber-500 text-white border-amber-500 shadow-md' : 'bg-white text-stone-700 border-amber-200'
+                }`}
+              >
+                <span>📁 {f.name}</span>
+                {canDelete && (
+                  <button onClick={(e) => handleDeleteFolder(f.id, e)} className="hover:text-rose-300">
+                    <Trash2 className="w-3.5 h-3.5"/>
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>
-      )}
+      </div>
+
+      <div className="space-y-3">
+        {displayedQuestions.length === 0 ? (
+          <div className="text-center py-10 text-stone-400 font-bold text-xs bg-white rounded-3xl border border-amber-200">
+            問題がまだ登録されていません
+          </div>
+        ) : (
+          displayedQuestions.map(q => {
+            const isFav = (userProfile.favoriteQIds || []).includes(q.id);
+            const isAuthor = q.uid === userProfile.uid;
+
+            return (
+              <div 
+                key={q.id} 
+                onClick={() => onSelectQuestion(q.id)} 
+                className="bg-white p-4 rounded-3xl border border-amber-200/90 shadow-sm hover:shadow-md transition cursor-pointer space-y-3"
+              >
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <span className="bg-amber-100 text-amber-800 text-[10px] font-black px-2.5 py-0.5 rounded-full">
+                      {q.subject}
+                    </span>
+                    <span className="text-[11px] font-bold text-stone-400">by {q.author || '匿名'}</span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); onToggleFavorite(q.id); }} 
+                      className="p-1 rounded-full hover:bg-amber-50 transition"
+                    >
+                      <Star className={`w-4 h-4 ${isFav ? 'fill-amber-400 text-amber-400' : 'text-stone-300'}`} />
+                    </button>
+
+                    <button 
+                      onClick={(e) => handleHitClick(q.id, q.hitCount, e)} 
+                      className="bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200 px-2.5 py-1 rounded-xl text-[10px] font-black flex items-center gap-1 transition active:scale-95"
+                    >
+                      <Flame className="w-3.5 h-3.5 text-orange-500 fill-orange-500"/> 出た！({q.hitCount || 0})
+                    </button>
+
+                    {isAuthor && (
+                      <button 
+                        onClick={(e) => handleDeleteQuestion(q.id, e)} 
+                        className="text-stone-400 hover:text-rose-500 p-1 transition"
+                      >
+                        <Trash2 className="w-4 h-4"/>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="font-extrabold text-xs text-stone-800 leading-relaxed">
+                  Q. {q.subQuestions?.[0]?.question || '無題の問題'}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
     </div>
   );
 }
