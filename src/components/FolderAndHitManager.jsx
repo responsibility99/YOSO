@@ -47,7 +47,7 @@ export default function FolderAndHitManager({
     }
   };
 
-  // 「出た！」ボタン（連打防止）
+  // 「出た！」ボタン（Firebaseに即時反映）
   const handleHitClick = async (qId, currentHits = 0, e) => {
     e.stopPropagation();
 
@@ -62,33 +62,37 @@ export default function FolderAndHitManager({
         hitCount: (currentHits || 0) + 1
       });
       
-      setUserProfile(prev => ({
-        ...prev,
-        hitQIds: [...(prev.hitQIds || []), qId]
-      }));
+      setUserProfile({
+        ...userProfile,
+        hitQIds: [...(userProfile.hitQIds || []), qId]
+      });
 
       gainXP(10, 'hitCount');
     } catch (err) {
       console.error(err);
+      alert('的中データの更新に失敗しました');
     }
   };
 
-  // 「出た！」カウントを0にリセットする関数（作成者/管理者用）
+  // 誰でも作成者・管理者の場合は「出た！」カウントを0に強力リセット
   const handleResetHitCount = async (qId, e) => {
     e.stopPropagation();
-    if (window.confirm('この問題の「出た！」カウントを「0」にリセットしますか？')) {
+    if (window.confirm('この問題の「出た！」カウントを完全に「0」にリセットしますか？')) {
       try {
         await updateDoc(doc(db, 'questions', qId), {
           hitCount: 0
         });
-        // 自身の押した履歴からも削除して再投入可能に
-        setUserProfile(prev => ({
-          ...prev,
-          hitQIds: (prev.hitQIds || []).filter(id => id !== qId)
-        }));
-        alert('「出た！」を0にリセットしました！');
+        
+        // 押し済みフラグを解除
+        setUserProfile({
+          ...userProfile,
+          hitQIds: (userProfile.hitQIds || []).filter(id => id !== qId)
+        });
+
+        alert('「出た！」を 0 にリセットしました！');
       } catch (err) {
-        alert('リセット失敗');
+        console.error(err);
+        alert('リセットに失敗しました: ' + err.message);
       }
     }
   };
@@ -215,8 +219,8 @@ export default function FolderAndHitManager({
                       {isHit ? `的中済み (${q.hitCount || 0})` : `出た！(${q.hitCount || 0})`}
                     </button>
 
-                    {/* リセットボタン（作成者専用） */}
-                    {isAuthor && q.hitCount > 0 && (
+                    {/* 作成者の場合、出た！カウントが1以上の時に0にリセットするボタンを表示 */}
+                    {isAuthor && (
                       <button
                         onClick={(e) => handleResetHitCount(q.id, e)}
                         className="text-amber-600 hover:text-amber-800 p-1 transition"
