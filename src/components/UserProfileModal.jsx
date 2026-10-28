@@ -9,7 +9,6 @@ export default function UserProfileModal({ userProfile, setUserProfile, badges, 
   const [customAvatarUrl, setCustomAvatarUrl] = useState(userProfile.customAvatarUrl || '');
   const [testDate, setTestDate] = useState(userProfile.testDate || '');
 
-  // 画像ファイルアップロード処理 (Base64エンコード)
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -47,7 +46,6 @@ export default function UserProfileModal({ userProfile, setUserProfile, badges, 
         </div>
 
         <form onSubmit={handleSave} className="space-y-4">
-          {/* 画像アップロード ＆ 絵文字選択 */}
           <div className="text-center space-y-2">
             <div className="relative w-20 h-20 mx-auto rounded-full overflow-hidden bg-amber-100 border-2 border-amber-300 flex items-center justify-center shadow-md">
               {customAvatarUrl ? (
@@ -113,7 +111,6 @@ export default function UserProfileModal({ userProfile, setUserProfile, badges, 
           </button>
         </form>
 
-        {/* 獲得バッジ */}
         <div className="border-t border-amber-100 pt-3 space-y-2">
           <h4 className="text-xs font-black text-stone-700 flex items-center gap-1.5">
             <Award className="w-4 h-4 text-amber-500"/> 獲得バッジ
