@@ -1,116 +1,137 @@
-import React from 'react';
-import { Medal, Calendar, ShieldCheck, X } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Camera, Award } from 'lucide-react';
 
-export default function UserProfileModal({ 
-  userProfile, 
-  setUserProfile, 
-  badges, 
-  onClose 
-}) {
-  const getDaysUntilTest = () => {
-    if (!userProfile.testDate) return null;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const diffTime = new Date(userProfile.testDate) - today;
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+const AVATARS = ['🎓', '✏️', '🦊', '🐱', '🐶', '🐼', '🦁', '🚀', '⭐', '🔥'];
+
+export default function UserProfileModal({ userProfile, setUserProfile, badges, onClose }) {
+  const [name, setName] = useState(userProfile.name || '');
+  const [avatar, setAvatar] = useState(userProfile.avatar || '🎓');
+  const [customAvatarUrl, setCustomAvatarUrl] = useState(userProfile.customAvatarUrl || '');
+  const [testDate, setTestDate] = useState(userProfile.testDate || '');
+
+  // 画像ファイルアップロード処理 (Base64エンコード)
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      alert('ファイルサイズが大きすぎます (2MB以下の画像を選択してください)');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setCustomAvatarUrl(reader.result);
+    };
+    reader.readAsDataURL(file);
   };
 
-  const daysLeft = getDaysUntilTest();
+  const handleSave = (e) => {
+    e.preventDefault();
+    setUserProfile(prev => ({
+      ...prev,
+      name: name.trim() || 'チャレンジャー',
+      avatar,
+      customAvatarUrl,
+      testDate
+    }));
+    onClose();
+  };
 
   return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-      <div className="bg-white p-6 rounded-3xl max-w-sm w-full border border-amber-200 text-stone-800 shadow-2xl flex flex-col max-h-[85vh]">
-        {/* ヘッダー */}
-        <div className="flex justify-between items-center border-b border-amber-100 pb-3 mb-4">
-          <h3 className="font-black text-base text-amber-600">マイページ & 実績</h3>
-          <button onClick={onClose} className="text-stone-400 hover:text-stone-700 transition"><X className="w-5 h-5"/></button>
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="bg-white p-6 rounded-3xl max-w-sm w-full border border-amber-200 text-stone-800 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center border-b border-amber-100 pb-3">
+          <h3 className="font-black text-base text-stone-800">プロフィール編集</h3>
+          <button onClick={onClose} className="text-stone-400 hover:text-stone-700"><X className="w-5 h-5"/></button>
         </div>
 
-        <div className="overflow-y-auto pr-1 space-y-4 flex-1">
-          {/* ユーザーカード */}
-          <div className="flex items-center gap-4 bg-gradient-to-r from-amber-50 to-orange-50 p-4 rounded-2xl border border-amber-200 shadow-sm">
-            <div className="text-4xl bg-white p-2 rounded-2xl shadow-sm">{userProfile.avatar || '🎓'}</div>
-            <div>
-              <div className="font-extrabold text-base text-stone-800">{userProfile.name}</div>
-              <div className="text-xs font-bold text-amber-600 flex items-center gap-1 mt-0.5">
-                <Medal className="w-3.5 h-3.5" /> Lv.{userProfile.level || 1} ({userProfile.xp || 0} XP)
-              </div>
+        <form onSubmit={handleSave} className="space-y-4">
+          {/* 画像アップロード ＆ 絵文字選択 */}
+          <div className="text-center space-y-2">
+            <div className="relative w-20 h-20 mx-auto rounded-full overflow-hidden bg-amber-100 border-2 border-amber-300 flex items-center justify-center shadow-md">
+              {customAvatarUrl ? (
+                <img src={customAvatarUrl} alt="custom avatar" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-4xl">{avatar}</span>
+              )}
+            </div>
+
+            <div className="flex justify-center gap-2">
+              <label className="bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-black px-3 py-1.5 rounded-xl cursor-pointer shadow-sm flex items-center gap-1">
+                <Camera className="w-3.5 h-3.5"/> 写真を選択
+                <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+              </label>
+              {customAvatarUrl && (
+                <button 
+                  type="button" 
+                  onClick={() => setCustomAvatarUrl('')} 
+                  className="bg-stone-200 hover:bg-stone-300 text-stone-700 text-[10px] font-bold px-2 py-1.5 rounded-xl"
+                >
+                  写真を解除
+                </button>
+              )}
+            </div>
+
+            <div className="flex flex-wrap justify-center gap-1.5 pt-1">
+              {AVATARS.map(a => (
+                <button 
+                  key={a} 
+                  type="button" 
+                  onClick={() => { setAvatar(a); setCustomAvatarUrl(''); }} 
+                  className={`text-lg p-1.5 rounded-xl border transition ${avatar === a && !customAvatarUrl ? 'bg-amber-200 border-amber-400' : 'bg-white border-stone-200'}`}
+                >
+                  {a}
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* テストカウントダウン設定 */}
-          <div className="bg-amber-50/60 p-3.5 rounded-2xl border border-amber-200/80 space-y-2">
-            <label className="text-[11px] font-extrabold text-amber-800 flex items-center gap-1">
-              <Calendar className="w-3.5 h-3.5 text-amber-500" /> 次のテスト本番の日程
-            </label>
+          <div className="space-y-1">
+            <label className="text-xs font-black text-stone-700">名前</label>
+            <input 
+              type="text" 
+              required 
+              value={name} 
+              onChange={e => setName(e.target.value)} 
+              className="w-full bg-amber-50/50 border border-amber-200 p-2.5 rounded-xl text-xs font-bold outline-none focus:border-amber-400"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-black text-stone-700">目標テスト本番日</label>
             <input 
               type="date" 
-              value={userProfile.testDate || ''} 
-              onChange={e => setUserProfile({ ...userProfile, testDate: e.target.value })} 
-              className="w-full bg-white border border-amber-200 p-2.5 rounded-xl text-xs font-bold text-stone-800 outline-none focus:border-amber-400 shadow-sm" 
+              value={testDate} 
+              onChange={e => setTestDate(e.target.value)} 
+              className="w-full bg-amber-50/50 border border-amber-200 p-2.5 rounded-xl text-xs font-bold outline-none focus:border-amber-400 text-stone-800"
             />
-            {daysLeft !== null && (
-              <div className="text-center text-xs font-black text-rose-500 pt-1">
-                {daysLeft > 0 ? `テストまであと ${daysLeft} 日！` : daysLeft === 0 ? '今日がテスト本番！' : 'テスト終了'}
-              </div>
-            )}
           </div>
 
-          {/* プロフィール編集 */}
-          <div className="space-y-3">
-            <div>
-              <label className="text-[10px] font-bold text-stone-500 mb-1 block">名前</label>
-              <input 
-                type="text" 
-                value={userProfile.name} 
-                onChange={e => setUserProfile({ ...userProfile, name: e.target.value })} 
-                className="w-full bg-amber-50/40 border border-amber-200 p-2.5 rounded-xl text-xs font-bold text-stone-800 outline-none focus:border-amber-400" 
-              />
-            </div>
-            <div>
-              <label className="text-[10px] font-bold text-stone-500 mb-1 block">アイコン (絵文字)</label>
-              <input 
-                type="text" 
-                value={userProfile.avatar} 
-                onChange={e => setUserProfile({ ...userProfile, avatar: e.target.value })} 
-                className="w-full bg-amber-50/40 border border-amber-200 p-2.5 rounded-xl text-xs font-bold text-stone-800 outline-none focus:border-amber-400" 
-              />
-            </div>
-          </div>
-
-          {/* 実績バッジ */}
-          <div className="space-y-2 pt-2 border-t border-amber-100">
-            <h4 className="text-xs font-extrabold text-amber-600 flex items-center gap-1">
-              <ShieldCheck className="w-4 h-4" /> 獲得バッジ
-            </h4>
-            <div className="grid grid-cols-2 gap-2">
-              {badges.map(b => {
-                const isEarned = (userProfile[b.type] || 0) >= b.req;
-                return (
-                  <div 
-                    key={b.id} 
-                    className={`p-2.5 rounded-2xl border flex items-center gap-2 transition ${
-                      isEarned 
-                        ? 'bg-amber-100/60 border-amber-300 text-stone-800 shadow-sm' 
-                        : 'bg-stone-50 border-stone-200 text-stone-400 opacity-60'
-                    }`}
-                  >
-                    <span className="text-xl">{b.icon}</span>
-                    <div>
-                      <div className="text-[11px] font-black">{b.name}</div>
-                      <div className="text-[9px] font-bold text-stone-500">{b.desc}</div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-4 pt-3 border-t border-amber-100">
-          <button onClick={onClose} className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white py-3 rounded-2xl text-xs font-black shadow-md transition">
-            保存して閉じる
+          <button type="submit" className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-white py-3 rounded-xl font-black text-xs shadow-md">
+            保存する
           </button>
+        </form>
+
+        {/* 獲得バッジ */}
+        <div className="border-t border-amber-100 pt-3 space-y-2">
+          <h4 className="text-xs font-black text-stone-700 flex items-center gap-1.5">
+            <Award className="w-4 h-4 text-amber-500"/> 獲得バッジ
+          </h4>
+          <div className="grid grid-cols-2 gap-2">
+            {badges.map(b => {
+              const isUnlocked = (userProfile[b.type] || 0) >= b.req;
+              return (
+                <div key={b.id} className={`p-2 rounded-xl border flex items-center gap-2 text-xs ${isUnlocked ? 'bg-amber-50 border-amber-300' : 'bg-stone-50 border-stone-200 opacity-50'}`}>
+                  <span className="text-lg">{b.icon}</span>
+                  <div>
+                    <div className="font-black text-[11px] text-stone-800">{b.name}</div>
+                    <div className="text-[9px] text-stone-500 font-bold">{b.desc}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>
