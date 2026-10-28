@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Home, PlusCircle, MessageCircle, Trophy, LogOut,
-  QrCode, HelpCircle, History, Users, Menu, X, Send, BookOpen, Calendar, Plus, Trash2, Edit, ShieldAlert, Star
+  QrCode, HelpCircle, History, Users, Menu, X, Send, BookOpen, Calendar, Plus, Trash2, Edit, ShieldAlert, Star, RefreshCw
 } from 'lucide-react';
 import { db } from './firebase';
 import { 
@@ -56,7 +56,8 @@ export default function App() {
           atkBonus: parsed.atkBonus || 0,
           defBonus: parsed.defBonus || 0,
           favoriteQIds: Array.isArray(parsed.favoriteQIds) ? parsed.favoriteQIds : [],
-          hitQIds: Array.isArray(parsed.hitQIds) ? parsed.hitQIds : []
+          hitQIds: Array.isArray(parsed.hitQIds) ? parsed.hitQIds : [],
+          inventory: Array.isArray(parsed.inventory) ? parsed.inventory : []
         };
       }
     } catch (e) {
@@ -66,7 +67,7 @@ export default function App() {
     return { 
       uid: defaultUid, name: 'チャレンジャー', avatar: '🎓', customAvatarUrl: '', testDate: '',
       xp: 0, level: 1, totalPosts: 0, totalChats: 0, hitCount: 0, secretCode: '',
-      weaponId: null, armorId: null, atkBonus: 0, defBonus: 0, favoriteQIds: [], hitQIds: []
+      weaponId: null, armorId: null, atkBonus: 0, defBonus: 0, favoriteQIds: [], hitQIds: [], inventory: []
     };
   });
 
@@ -89,6 +90,19 @@ export default function App() {
   const [historyList, setHistoryList] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
 
+  // ログイン画面でのアカウント復元用メンバーリスト
+  const [roomUsers, setRoomUsers] = useState([]);
+
+  useEffect(() => {
+    if (!tempCode.trim()) return;
+    const q = query(collection(db, 'users'), orderBy('xp', 'desc'));
+    const unsub = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      setRoomUsers(data.filter(d => d.secretCode === tempCode.trim()));
+    });
+    return () => unsub();
+  }, [tempCode]);
+
   useEffect(() => {
     if (!userProfile.secretCode) return;
     const unsub = onSnapshot(collection(db, 'folders'), (snapshot) => {
@@ -107,7 +121,6 @@ export default function App() {
     return () => unsub();
   }, [userProfile.secretCode]);
 
-  // リアルタイムでランキングとメンバーリストを同期
   useEffect(() => {
     if (!userProfile.secretCode) return;
     const q = query(collection(db, 'users'), orderBy('xp', 'desc'));
@@ -134,7 +147,6 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // プロフィール変更を確実にFirebaseに送信
   const updateProfileAndSync = async (newProfile) => {
     setUserProfile(newProfile);
     localStorage.setItem('study_app_user_v6', JSON.stringify(newProfile));
@@ -217,6 +229,15 @@ export default function App() {
     }
   };
 
+  // 既存のアカウントを選択してログイン
+  const handleSelectExistingUser = (selectedUser) => {
+    updateProfileAndSync({
+      ...selectedUser,
+      secretCode: tempCode.trim()
+    });
+    alert(`「${selectedUser.name}」として復元ログインしました！`);
+  };
+
   const getDaysUntilTest = () => {
     if (!userProfile.testDate) return null;
     const today = new Date();
@@ -240,21 +261,55 @@ export default function App() {
           </div>
           <h1 className="text-2xl font-black text-amber-600">YOSO</h1>
           <p className="text-xs font-bold text-stone-600 leading-relaxed">
-            同じ合言葉を入力して<br/>仲間と予想問題を共有しよう！
+            合言葉を入力して<br/>仲間と予想問題を共有しよう！
           </p>
-          <form onSubmit={(e) => { e.preventDefault(); if(tempCode.trim()) updateProfileAndSync({...userProfile, secretCode: tempCode.trim()}); }}>
+
+          <div className="space-y-4">
             <input 
               type="text" 
               required 
               value={tempCode} 
               onChange={e => setTempCode(e.target.value)} 
               placeholder="例: room2026" 
-              className="w-full bg-amber-50/50 border-2 border-amber-200 focus:border-amber-500 p-4 rounded-2xl text-center text-lg font-black outline-none text-stone-800 transition mb-4 shadow-inner" 
+              className="w-full bg-amber-50/50 border-2 border-amber-200 focus:border-amber-500 p-4 rounded-2xl text-center text-lg font-black outline-none text-stone-800 transition shadow-inner" 
             />
-            <button type="submit" className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white py-4 rounded-2xl font-black shadow-lg shadow-amber-500/30 transition">
-              ルームに入る
+
+            {/* 合言葉を入力すると既存ユーザー選択欄が表示される */}
+            {tempCode.trim() && roomUsers.length > 0 && (
+              <div className="bg-amber-50 p-3 rounded-2xl border border-amber-200 space-y-2 text-left max-h-40 overflow-y-auto">
+                <div className="text-[10px] font-black text-amber-800 flex items-center gap-1">
+                  <RefreshCw className="w-3 h-3 text-amber-600"/> 既存のアカウントを選んで復元:
+                </div>
+                {roomUsers.map(u => (
+                  <button 
+                    key={u.uid}
+                    onClick={() => handleSelectExistingUser(u)}
+                    className="w-full bg-white hover:bg-amber-100 p-2 rounded-xl text-xs font-bold flex items-center justify-between border border-amber-200 text-stone-800 transition"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span>{u.avatar || '🎓'}</span>
+                      <span className="font-extrabold">{u.name}</span>
+                    </div>
+                    <span className="text-[10px] text-amber-600 font-black">Lv.{u.level || 1}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <button 
+              onClick={() => {
+                if(tempCode.trim()) {
+                  updateProfileAndSync({
+                    ...userProfile,
+                    secretCode: tempCode.trim()
+                  });
+                }
+              }}
+              className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white py-4 rounded-2xl font-black shadow-lg shadow-amber-500/30 transition"
+            >
+              新規アカウントで入る
             </button>
-          </form>
+          </div>
         </div>
       </div>
     );
@@ -262,7 +317,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-amber-50/60 via-orange-50/30 to-amber-100/40 text-stone-800 flex flex-col font-sans pb-24">
-      {/* ヘッダー */}
       <header className="bg-white/80 backdrop-blur-md sticky top-0 z-30 border-b border-amber-200/60 px-4 py-3 flex justify-between items-center shadow-sm">
         <div className="flex items-center gap-2 cursor-pointer" onClick={() => { setActiveTab('home'); setSelectedQuestionId(null); setIsFlashcardMode(false); setShowPvP(false); setEditingQuestion(null); }}>
           <div className="bg-gradient-to-tr from-amber-400 to-orange-500 p-2 rounded-2xl shadow-sm"><BookOpen className="w-5 h-5 text-white" /></div>
@@ -285,7 +339,6 @@ export default function App() {
         </div>
       </header>
 
-      {/* ドロワー */}
       {showMenuDrawer && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex justify-end">
           <div className="bg-white w-64 h-full p-6 space-y-6 flex flex-col justify-between border-l border-amber-200 shadow-2xl">
@@ -306,7 +359,6 @@ export default function App() {
         </div>
       )}
 
-      {/* メインビュー */}
       <main className="max-w-4xl mx-auto p-4 flex-1 w-full space-y-4">
         {daysLeft !== null && !selectedQuestionId && !isFlashcardMode && !editingQuestion && (
           <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white p-5 rounded-3xl shadow-xl border border-amber-300 relative overflow-hidden flex justify-between items-center px-6">
@@ -420,7 +472,6 @@ export default function App() {
         )}
       </main>
 
-      {/* フッターナビ */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-amber-200 p-2 z-30 flex justify-around shadow-lg rounded-t-3xl">
         <NavBtn active={activeTab === 'home'} icon={<Home className="w-6 h-6" />} label="ホーム" onClick={() => { setActiveTab('home'); setSelectedQuestionId(null); setIsFlashcardMode(false); setShowPvP(false); setEditingQuestion(null); }} />
         <NavBtn active={activeTab === 'create'} icon={<PlusCircle className="w-6 h-6" />} label="問題作成" onClick={() => { setActiveTab('create'); setSelectedQuestionId(null); setIsFlashcardMode(false); setShowPvP(false); setEditingQuestion(null); }} />
@@ -428,7 +479,6 @@ export default function App() {
         <NavBtn active={activeTab === 'ranking'} icon={<Trophy className="w-6 h-6" />} label="順位" onClick={() => { setActiveTab('ranking'); setSelectedQuestionId(null); setIsFlashcardMode(false); setShowPvP(false); setEditingQuestion(null); }} />
       </nav>
 
-      {/* モーダル */}
       {showProfileModal && (
         <UserProfileModal 
           userProfile={userProfile} 
@@ -545,7 +595,6 @@ export default function App() {
   );
 }
 
-// 投稿機能（安全化）
 function CreateCardView({ folders, userProfile, onSuccess, editData, onCancel }) {
   const [subject, setSubject] = useState(editData ? editData.subject : SUBJECTS[0]);
   const [folderId, setFolderId] = useState(editData ? editData.folderId : '');
