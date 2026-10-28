@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Home, PlusCircle, MessageCircle, Trophy, LogOut,
-  QrCode, HelpCircle, History, Users, Menu, X, Send, BookOpen, Calendar, Plus, Trash2, Edit, ShieldAlert, Star, RefreshCw
+  QrCode, HelpCircle, History, Users, Menu, X, Send, BookOpen, Calendar, Plus, Trash2, Edit, ShieldAlert, Star, RefreshCw, UserCheck
 } from 'lucide-react';
 import { db } from './firebase';
 import { 
-  collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, serverTimestamp, setDoc, query, orderBy
+  collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, serverTimestamp, setDoc, query, orderBy, getDocs
 } from 'firebase/firestore';
 import './index.css';
 
@@ -78,6 +78,7 @@ export default function App() {
   const [showMemberList, setShowMemberList] = useState(false);
   const [showMenuDrawer, setShowMenuDrawer] = useState(false);
   const [tempCode, setTempCode] = useState('');
+  const [restoreName, setRestoreName] = useState('');
 
   const [histVersion, setHistVersion] = useState('');
   const [histTitle, setHistTitle] = useState('');
@@ -88,20 +89,17 @@ export default function App() {
   const [questions, setQuestions] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
   const [historyList, setHistoryList] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // ログイン画面でのアカウント復元用メンバーリスト
-  const [roomUsers, setRoomUsers] = useState([]);
-
+  // 全ユーザーデータを取得して復元用に準備
   useEffect(() => {
-    if (!tempCode.trim()) return;
-    const q = query(collection(db, 'users'), orderBy('xp', 'desc'));
-    const unsub = onSnapshot(q, (snapshot) => {
+    const unsub = onSnapshot(collection(db, 'users'), (snapshot) => {
       const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      setRoomUsers(data.filter(d => d.secretCode === tempCode.trim()));
+      setAllUsers(data);
     });
     return () => unsub();
-  }, [tempCode]);
+  }, []);
 
   useEffect(() => {
     if (!userProfile.secretCode) return;
@@ -229,13 +227,27 @@ export default function App() {
     }
   };
 
-  // 既存のアカウントを選択してログイン
+  // 選択した既存アカウントで復元
   const handleSelectExistingUser = (selectedUser) => {
-    updateProfileAndSync({
+    const restored = {
       ...selectedUser,
       secretCode: tempCode.trim()
-    });
+    };
+    updateProfileAndSync(restored);
     alert(`「${selectedUser.name}」として復元ログインしました！`);
+  };
+
+  // 名前入力による手動検索復元
+  const handleSearchAndRestore = (e) => {
+    e.preventDefault();
+    if (!restoreName.trim()) return;
+
+    const found = allUsers.find(u => u.name.trim() === restoreName.trim());
+    if (found) {
+      handleSelectExistingUser(found);
+    } else {
+      alert(`「${restoreName}」という名前のアカウントが見つかりませんでした。正確な名前を入力してください。`);
+    }
   };
 
   const getDaysUntilTest = () => {
@@ -252,33 +264,37 @@ export default function App() {
     ? questions.filter(q => (userProfile.favoriteQIds || []).includes(q.id))
     : questions;
 
+  const roomUsers = tempCode.trim() 
+    ? allUsers.filter(u => u.secretCode === tempCode.trim())
+    : [];
+
   if (!userProfile.secretCode) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-amber-100 via-orange-100 to-amber-200 flex items-center justify-center p-4">
-        <div className="bg-white/90 backdrop-blur-md p-8 rounded-3xl border border-amber-200 shadow-xl max-w-sm w-full text-center space-y-6">
-          <div className="bg-gradient-to-tr from-amber-400 to-orange-500 w-20 h-20 mx-auto rounded-3xl flex items-center justify-center shadow-lg shadow-orange-500/20">
-            <BookOpen className="w-10 h-10 text-white" />
+        <div className="bg-white/90 backdrop-blur-md p-6 rounded-3xl border border-amber-200 shadow-xl max-w-sm w-full text-center space-y-5">
+          <div className="bg-gradient-to-tr from-amber-400 to-orange-500 w-16 h-16 mx-auto rounded-3xl flex items-center justify-center shadow-lg shadow-orange-500/20">
+            <BookOpen className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-2xl font-black text-amber-600">YOSO</h1>
           <p className="text-xs font-bold text-stone-600 leading-relaxed">
-            合言葉を入力して<br/>仲間と予想問題を共有しよう！
+            合言葉を入力してログイン
           </p>
 
-          <div className="space-y-4">
+          <div className="space-y-3">
             <input 
               type="text" 
               required 
               value={tempCode} 
               onChange={e => setTempCode(e.target.value)} 
-              placeholder="例: room2026" 
-              className="w-full bg-amber-50/50 border-2 border-amber-200 focus:border-amber-500 p-4 rounded-2xl text-center text-lg font-black outline-none text-stone-800 transition shadow-inner" 
+              placeholder="合言葉 (例: room2026)" 
+              className="w-full bg-amber-50/50 border-2 border-amber-200 focus:border-amber-500 p-3.5 rounded-2xl text-center text-base font-black outline-none text-stone-800 transition shadow-inner" 
             />
 
-            {/* 合言葉を入力すると既存ユーザー選択欄が表示される */}
+            {/* ① 合言葉一致メンバー一覧からの復元 */}
             {tempCode.trim() && roomUsers.length > 0 && (
-              <div className="bg-amber-50 p-3 rounded-2xl border border-amber-200 space-y-2 text-left max-h-40 overflow-y-auto">
+              <div className="bg-amber-50 p-3 rounded-2xl border border-amber-200 space-y-2 text-left max-h-36 overflow-y-auto">
                 <div className="text-[10px] font-black text-amber-800 flex items-center gap-1">
-                  <RefreshCw className="w-3 h-3 text-amber-600"/> 既存のアカウントを選んで復元:
+                  <RefreshCw className="w-3 h-3 text-amber-600"/> メンバーからアカウントを選択:
                 </div>
                 {roomUsers.map(u => (
                   <button 
@@ -296,6 +312,25 @@ export default function App() {
               </div>
             )}
 
+            {/* ② 名前を直接入力して復元する機能 */}
+            {tempCode.trim() && (
+              <form onSubmit={handleSearchAndRestore} className="pt-1 space-y-1.5">
+                <div className="text-[10px] font-black text-stone-500 text-left px-1">一覧にない場合は名前で検索:</div>
+                <div className="flex gap-1.5">
+                  <input 
+                    type="text" 
+                    placeholder="元の名前を入力..." 
+                    value={restoreName}
+                    onChange={e => setRestoreName(e.target.value)}
+                    className="flex-1 bg-stone-50 border border-stone-200 p-2 rounded-xl text-xs font-bold outline-none"
+                  />
+                  <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-xl text-xs font-black shadow-sm flex items-center gap-1">
+                    <UserCheck className="w-3.5 h-3.5"/> 復元
+                  </button>
+                </div>
+              </form>
+            )}
+
             <button 
               onClick={() => {
                 if(tempCode.trim()) {
@@ -305,7 +340,7 @@ export default function App() {
                   });
                 }
               }}
-              className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white py-4 rounded-2xl font-black shadow-lg shadow-amber-500/30 transition"
+              className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white py-3.5 rounded-2xl font-black shadow-lg shadow-amber-500/30 transition text-xs"
             >
               新規アカウントで入る
             </button>
