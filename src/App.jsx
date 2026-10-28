@@ -29,11 +29,11 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [selectedFolderId, setSelectedFolderId] = useState(null);
   const [selectedQuestionId, setSelectedQuestionId] = useState(null);
+  const [editingQuestion, setEditingQuestion] = useState(null); // 編集対象
   const [isFlashcardMode, setIsFlashcardMode] = useState(false);
   const [showPvP, setShowPvP] = useState(false);
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
 
-  // 安全な初期データロード（エラーで画面が真っ白になるのを完全防ぎます）
   const [userProfile, setUserProfile] = useState(() => {
     try {
       const saved = localStorage.getItem('study_app_user_v6');
@@ -55,7 +55,8 @@ export default function App() {
           armorId: parsed.armorId || null,
           atkBonus: parsed.atkBonus || 0,
           defBonus: parsed.defBonus || 0,
-          favoriteQIds: Array.isArray(parsed.favoriteQIds) ? parsed.favoriteQIds : []
+          favoriteQIds: Array.isArray(parsed.favoriteQIds) ? parsed.favoriteQIds : [],
+          hitQIds: Array.isArray(parsed.hitQIds) ? parsed.hitQIds : [] // 的中押し済みID
         };
       }
     } catch (e) {
@@ -65,7 +66,7 @@ export default function App() {
     return { 
       uid: defaultUid, name: 'チャレンジャー', avatar: '🎓', customAvatarUrl: '', testDate: '',
       xp: 0, level: 1, totalPosts: 0, totalChats: 0, hitCount: 0, secretCode: '',
-      weaponId: null, armorId: null, atkBonus: 0, defBonus: 0, favoriteQIds: []
+      weaponId: null, armorId: null, atkBonus: 0, defBonus: 0, favoriteQIds: [], hitQIds: []
     };
   });
 
@@ -132,6 +133,7 @@ export default function App() {
     return () => unsub();
   }, []);
 
+  // プロフィール変更時にFirebaseとローカル両方を確実に同期
   useEffect(() => {
     localStorage.setItem('study_app_user_v6', JSON.stringify(userProfile));
     if (userProfile.uid && userProfile.secretCode) {
@@ -260,7 +262,7 @@ export default function App() {
     <div className="min-h-screen bg-gradient-to-b from-amber-50/60 via-orange-50/30 to-amber-100/40 text-stone-800 flex flex-col font-sans pb-24">
       {/* ヘッダー */}
       <header className="bg-white/80 backdrop-blur-md sticky top-0 z-30 border-b border-amber-200/60 px-4 py-3 flex justify-between items-center shadow-sm">
-        <div className="flex items-center gap-2 cursor-pointer" onClick={() => { setActiveTab('home'); setSelectedQuestionId(null); setIsFlashcardMode(false); setShowPvP(false); }}>
+        <div className="flex items-center gap-2 cursor-pointer" onClick={() => { setActiveTab('home'); setSelectedQuestionId(null); setIsFlashcardMode(false); setShowPvP(false); setEditingQuestion(null); }}>
           <div className="bg-gradient-to-tr from-amber-400 to-orange-500 p-2 rounded-2xl shadow-sm"><BookOpen className="w-5 h-5 text-white" /></div>
           <h1 className="font-black text-xl tracking-wider bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">YOSO</h1>
         </div>
@@ -304,7 +306,7 @@ export default function App() {
 
       {/* メインビュー */}
       <main className="max-w-4xl mx-auto p-4 flex-1 w-full space-y-4">
-        {daysLeft !== null && !selectedQuestionId && !isFlashcardMode && (
+        {daysLeft !== null && !selectedQuestionId && !isFlashcardMode && !editingQuestion && (
           <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white p-5 rounded-3xl shadow-xl border border-amber-300 relative overflow-hidden flex justify-between items-center px-6">
             <div className="space-y-1">
               <div className="flex items-center gap-1.5 font-black text-xs text-amber-100">
@@ -324,7 +326,16 @@ export default function App() {
           </div>
         )}
 
-        {selectedQuestionId ? (
+        {/* 編集モード時の画面表示 */}
+        {editingQuestion ? (
+          <CreateCardView 
+            folders={folders} 
+            userProfile={userProfile} 
+            editData={editingQuestion}
+            onSuccess={() => { setEditingQuestion(null); setActiveTab('home'); }} 
+            onCancel={() => setEditingQuestion(null)}
+          />
+        ) : selectedQuestionId ? (
           <QuestionDetailView 
             question={questions.find(q => q.id === selectedQuestionId)} 
             currentUid={userProfile.uid}
@@ -392,8 +403,10 @@ export default function App() {
                       onSelectFolder={setSelectedFolderId}
                       onSelectQuestion={setSelectedQuestionId}
                       userProfile={userProfile}
+                      setUserProfile={setUserProfile}
                       gainXP={gainXP}
                       onToggleFavorite={toggleFavorite}
+                      onEditQuestion={(q) => setEditingQuestion(q)}
                     />
                   </div>
                 )}
@@ -408,10 +421,10 @@ export default function App() {
 
       {/* フッターナビ */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-amber-200 p-2 z-30 flex justify-around shadow-lg rounded-t-3xl">
-        <NavBtn active={activeTab === 'home'} icon={<Home className="w-6 h-6" />} label="ホーム" onClick={() => { setActiveTab('home'); setSelectedQuestionId(null); setIsFlashcardMode(false); setShowPvP(false); }} />
-        <NavBtn active={activeTab === 'create'} icon={<PlusCircle className="w-6 h-6" />} label="問題作成" onClick={() => { setActiveTab('create'); setSelectedQuestionId(null); setIsFlashcardMode(false); setShowPvP(false); }} />
-        <NavBtn active={activeTab === 'chat'} icon={<MessageCircle className="w-6 h-6" />} label="チャット" onClick={() => { setActiveTab('chat'); setSelectedQuestionId(null); setIsFlashcardMode(false); setShowPvP(false); }} />
-        <NavBtn active={activeTab === 'ranking'} icon={<Trophy className="w-6 h-6" />} label="順位" onClick={() => { setActiveTab('ranking'); setSelectedQuestionId(null); setIsFlashcardMode(false); setShowPvP(false); }} />
+        <NavBtn active={activeTab === 'home'} icon={<Home className="w-6 h-6" />} label="ホーム" onClick={() => { setActiveTab('home'); setSelectedQuestionId(null); setIsFlashcardMode(false); setShowPvP(false); setEditingQuestion(null); }} />
+        <NavBtn active={activeTab === 'create'} icon={<PlusCircle className="w-6 h-6" />} label="問題作成" onClick={() => { setActiveTab('create'); setSelectedQuestionId(null); setIsFlashcardMode(false); setShowPvP(false); setEditingQuestion(null); }} />
+        <NavBtn active={activeTab === 'chat'} icon={<MessageCircle className="w-6 h-6" />} label="チャット" onClick={() => { setActiveTab('chat'); setSelectedQuestionId(null); setIsFlashcardMode(false); setShowPvP(false); setEditingQuestion(null); }} />
+        <NavBtn active={activeTab === 'ranking'} icon={<Trophy className="w-6 h-6" />} label="順位" onClick={() => { setActiveTab('ranking'); setSelectedQuestionId(null); setIsFlashcardMode(false); setShowPvP(false); setEditingQuestion(null); }} />
       </nav>
 
       {/* モーダル */}
@@ -531,10 +544,11 @@ export default function App() {
   );
 }
 
-function CreateCardView({ folders, userProfile, onSuccess }) {
-  const [subject, setSubject] = useState(SUBJECTS[0]);
-  const [folderId, setFolderId] = useState('');
-  const [subQuestions, setSubQuestions] = useState([{ question: '', answer: '' }]);
+// 問題の投稿・編集コンポーネント
+function CreateCardView({ folders, userProfile, onSuccess, editData, onCancel }) {
+  const [subject, setSubject] = useState(editData ? editData.subject : SUBJECTS[0]);
+  const [folderId, setFolderId] = useState(editData ? editData.folderId : '');
+  const [subQuestions, setSubQuestions] = useState(editData ? editData.subQuestions : [{ question: '', answer: '' }]);
 
   const handleAddSub = () => {
     setSubQuestions([...subQuestions, { question: '', answer: '' }]);
@@ -556,17 +570,37 @@ function CreateCardView({ folders, userProfile, onSuccess }) {
     if (!subQuestions[0].question.trim()) return;
 
     try {
-      await addDoc(collection(db, 'questions'), {
-        subject, folderId, author: userProfile.name, avatar: userProfile.avatar, customAvatarUrl: userProfile.customAvatarUrl || '', uid: userProfile.uid, secretCode: userProfile.secretCode,
-        subQuestions, comments: [], createdAt: Date.now()
-      });
+      if (editData) {
+        // 更新処理
+        await updateDoc(doc(db, 'questions', editData.id), {
+          subject,
+          folderId,
+          subQuestions
+        });
+        alert('問題を更新しました！');
+      } else {
+        // 新規追加
+        await addDoc(collection(db, 'questions'), {
+          subject, folderId, author: userProfile.name, avatar: userProfile.avatar, customAvatarUrl: userProfile.customAvatarUrl || '', uid: userProfile.uid, secretCode: userProfile.secretCode,
+          subQuestions, comments: [], createdAt: Date.now()
+        });
+      }
       onSuccess();
-    } catch (err) { alert('作成失敗'); }
+    } catch (err) { alert('保存に失敗しました'); }
   };
 
   return (
     <form onSubmit={handleSubmit} className="bg-white p-6 rounded-3xl space-y-4 border border-amber-200 max-w-xl mx-auto shadow-lg">
-      <h2 className="text-lg font-black text-amber-600 flex items-center gap-2"><PlusCircle className="w-5 h-5"/> 新しい予想問題を投稿</h2>
+      <div className="flex justify-between items-center">
+        <h2 className="text-lg font-black text-amber-600 flex items-center gap-2">
+          <PlusCircle className="w-5 h-5"/> {editData ? '問題を編集' : '新しい予想問題を投稿'}
+        </h2>
+        {onCancel && (
+          <button type="button" onClick={onCancel} className="text-xs font-bold text-stone-400 hover:text-stone-700">
+            キャンセル
+          </button>
+        )}
+      </div>
       
       <div className="grid grid-cols-2 gap-2">
         <select value={subject} onChange={e => setSubject(e.target.value)} className="bg-amber-50/50 border border-amber-200 p-3 rounded-xl text-xs font-bold text-stone-800">
@@ -616,12 +650,13 @@ function CreateCardView({ folders, userProfile, onSuccess }) {
       </div>
 
       <button type="submit" className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-white py-3.5 rounded-xl font-black text-xs shadow-md shadow-amber-500/20">
-        投稿する (+50 XP)
+        {editData ? '更新を保存する' : '投稿する (+50 XP)'}
       </button>
     </form>
   );
 }
 
+// チャット画面（発言取り消し/削除機能追加）
 function ChatView({ userProfile, leaderboard, onMessageSent }) {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
@@ -651,6 +686,17 @@ function ChatView({ userProfile, leaderboard, onMessageSent }) {
     } catch (err) {}
   };
 
+  // 自分の発言取り消し（削除）
+  const handleDeleteChat = async (msgId) => {
+    if (window.confirm('この発言を取り消しますか？')) {
+      try {
+        await deleteDoc(doc(db, 'chats', msgId));
+      } catch (err) {
+        alert('削除できませんでした');
+      }
+    }
+  };
+
   return (
     <div className="flex flex-col space-y-3 h-[calc(100vh-160px)]">
       <h2 className="text-base font-black text-stone-800 flex items-center gap-2"><MessageCircle className="w-5 h-5 text-amber-500"/> チャット</h2>
@@ -670,8 +716,19 @@ function ChatView({ userProfile, leaderboard, onMessageSent }) {
               </div>
               <div className={`space-y-0.5 max-w-[75%] ${isMe ? 'items-end text-right' : 'items-start'}`}>
                 <div className="text-[10px] font-bold text-stone-400 px-1">{sender.name}</div>
-                <div className={`p-3 rounded-2xl text-xs font-bold ${isMe ? 'bg-amber-500 text-white shadow-sm' : 'bg-amber-100/70 text-stone-800'}`}>
-                  {msg.text}
+                <div className="flex items-center gap-1 group">
+                  {isMe && (
+                    <button 
+                      onClick={() => handleDeleteChat(msg.id)} 
+                      className="text-stone-300 hover:text-rose-500 p-1 opacity-70 hover:opacity-100 transition"
+                      title="発言を取り消す"
+                    >
+                      <Trash2 className="w-3.5 h-3.5"/>
+                    </button>
+                  )}
+                  <div className={`p-3 rounded-2xl text-xs font-bold ${isMe ? 'bg-amber-500 text-white shadow-sm' : 'bg-amber-100/70 text-stone-800'}`}>
+                    {msg.text}
+                  </div>
                 </div>
               </div>
             </div>
@@ -686,6 +743,7 @@ function ChatView({ userProfile, leaderboard, onMessageSent }) {
   );
 }
 
+// 戦闘力（Power）順ランキング画面（画像同期完全対応）
 function RankingView({ leaderboard, currentUid }) {
   const sortedByPower = [...leaderboard].map(u => {
     const lvl = u.level || 1;
