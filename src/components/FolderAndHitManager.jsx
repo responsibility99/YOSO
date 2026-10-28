@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FolderPlus, Flame, Star, Trash2, Edit } from 'lucide-react';
+import { FolderPlus, Flame, Star, Trash2, Edit, RotateCcw } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 
@@ -47,7 +47,7 @@ export default function FolderAndHitManager({
     }
   };
 
-  // 「出た！」ボタンの連打防止付きカウントアップ
+  // 「出た！」ボタン（連打防止）
   const handleHitClick = async (qId, currentHits = 0, e) => {
     e.stopPropagation();
 
@@ -62,7 +62,6 @@ export default function FolderAndHitManager({
         hitCount: (currentHits || 0) + 1
       });
       
-      // ローカルの押した履歴を更新して連打をブロック
       setUserProfile(prev => ({
         ...prev,
         hitQIds: [...(prev.hitQIds || []), qId]
@@ -74,7 +73,26 @@ export default function FolderAndHitManager({
     }
   };
 
-  // 問題削除（作成者のみ）
+  // 「出た！」カウントを0にリセットする関数（作成者/管理者用）
+  const handleResetHitCount = async (qId, e) => {
+    e.stopPropagation();
+    if (window.confirm('この問題の「出た！」カウントを「0」にリセットしますか？')) {
+      try {
+        await updateDoc(doc(db, 'questions', qId), {
+          hitCount: 0
+        });
+        // 自身の押した履歴からも削除して再投入可能に
+        setUserProfile(prev => ({
+          ...prev,
+          hitQIds: (prev.hitQIds || []).filter(id => id !== qId)
+        }));
+        alert('「出た！」を0にリセットしました！');
+      } catch (err) {
+        alert('リセット失敗');
+      }
+    }
+  };
+
   const handleDeleteQuestion = async (qId, e) => {
     e.stopPropagation();
     if (window.confirm('この問題を削除しますか？')) {
@@ -177,7 +195,6 @@ export default function FolderAndHitManager({
                   </div>
 
                   <div className="flex items-center gap-2">
-                    {/* お気に入りボタン */}
                     <button 
                       onClick={(e) => { e.stopPropagation(); onToggleFavorite(q.id); }} 
                       className="p-1 rounded-full hover:bg-amber-50 transition"
@@ -185,7 +202,6 @@ export default function FolderAndHitManager({
                       <Star className={`w-4 h-4 ${isFav ? 'fill-amber-400 text-amber-400' : 'text-stone-300'}`} />
                     </button>
 
-                    {/* 的中「出た！」ボタン（押すとグレーアウトしてロック） */}
                     <button 
                       disabled={isHit}
                       onClick={(e) => handleHitClick(q.id, q.hitCount, e)} 
@@ -199,7 +215,17 @@ export default function FolderAndHitManager({
                       {isHit ? `的中済み (${q.hitCount || 0})` : `出た！(${q.hitCount || 0})`}
                     </button>
 
-                    {/* 作成者用 編集＆削除ボタン */}
+                    {/* リセットボタン（作成者専用） */}
+                    {isAuthor && q.hitCount > 0 && (
+                      <button
+                        onClick={(e) => handleResetHitCount(q.id, e)}
+                        className="text-amber-600 hover:text-amber-800 p-1 transition"
+                        title="出た！カウントを0にリセット"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5"/>
+                      </button>
+                    )}
+
                     {isAuthor && (
                       <div className="flex items-center gap-1">
                         <button 
