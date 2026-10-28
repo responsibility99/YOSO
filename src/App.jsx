@@ -1,643 +1,461 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Home, PlusCircle, MessageCircle, Trophy, LogOut,
-  QrCode, HelpCircle, History, Users, Menu, X, Send, BookOpen, Calendar, Plus, Trash2, Edit, ShieldAlert
-} from 'lucide-react';
-import { db } from './firebase';
-import { 
-  collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, serverTimestamp, setDoc, query, orderBy
-} from 'firebase/firestore';
-import './index.css';
+import { Swords, Check, X, Clock, Zap, Trophy, Filter, ShoppingBag, Shield, Wand2, ShieldAlert, Sparkles, Sword } from 'lucide-react';
+import { db } from '../firebase';
+import { doc, updateDoc, onSnapshot, setDoc } from 'firebase/firestore';
 
-import PvPBattle, { SUBJECTS } from './components/PvPBattle';
-import QuestionDetailView, { FlashcardView } from './components/QuestionDetailView';
-import UserProfileModal from './components/UserProfileModal';
-import FolderAndHitManager from './components/FolderAndHitManager';
+export const SUBJECT_ELEMENTS = {
+  '国語1': { name: '国語1', color: 'bg-amber-100 text-amber-800' },
+  '国語２a': { name: '国語２a', color: 'bg-amber-100 text-amber-800' },
+  '国語２ｂ': { name: '国語２ｂ', color: 'bg-amber-100 text-amber-800' },
+  '歴史': { name: '歴史', color: 'bg-amber-100 text-amber-800' },
+  '数学Ａ': { name: '数学Ａ', color: 'bg-amber-100 text-amber-800' },
+  '数学Ｂ': { name: '数学Ｂ', color: 'bg-amber-100 text-amber-800' },
+  '化学': { name: '化学', color: 'bg-amber-100 text-amber-800' },
+  '生物': { name: '生物', color: 'bg-amber-100 text-amber-800' },
+  '地学': { name: '地学', color: 'bg-amber-100 text-amber-800' },
+  '地理': { name: '地理', color: 'bg-amber-100 text-amber-800' },
+  '英語１': { name: '英語１', color: 'bg-amber-100 text-amber-800' },
+  '英語２': { name: '英語２', color: 'bg-amber-100 text-amber-800' },
+  '音楽': { name: '音楽', color: 'bg-amber-100 text-amber-800' }
+};
 
-const ADMIN_PASSWORD = 'admin123';
+export const SUBJECTS = Object.keys(SUBJECT_ELEMENTS);
 
-const BADGES = [
-  { id: 'p1', icon: '🌱', name: '初投稿', desc: '問題を1回投稿', type: 'totalPosts', req: 1 },
-  { id: 'p2', icon: '🛠️', name: '問題職人', desc: '問題を5回投稿', type: 'totalPosts', req: 5 },
-  { id: 'c1', icon: '👋', name: '初めまして', desc: 'チャット1回送信', type: 'totalChats', req: 1 },
-  { id: 'c2', icon: '💬', name: 'おしゃべり', desc: 'チャット10回送信', type: 'totalChats', req: 10 },
-  { id: 'l1', icon: '🥉', name: 'ルーキー', desc: 'レベル5到達', type: 'level', req: 5 },
-  { id: 'h1', icon: '🎯', name: '神予想屋', desc: '的中した問題がある', type: 'hitCount', req: 1 },
+// スタイリッシュなLucideアイコン付きショップアイテム
+const SHOP_ITEMS = [
+  { id: 'w1', name: '木彫りの短剣', type: 'weapon', cost: 100, atkBonus: 20, icon: Sword },
+  { id: 'w2', name: '鍛鉄の太刀', type: 'weapon', cost: 300, atkBonus: 60, icon: Swords },
+  { id: 'w3', name: '星詠みの聖杖', type: 'weapon', cost: 600, atkBonus: 120, icon: Wand2 },
+  { id: 'a1', name: '革のプロテクター', type: 'armor', cost: 100, defBonus: 10, icon: Shield },
+  { id: 'a2', name: '重鋼甲冑', type: 'armor', cost: 300, defBonus: 30, icon: ShieldAlert },
+  { id: 'a3', name: '光輝のイージス', type: 'armor', cost: 600, defBonus: 60, icon: Sparkles },
 ];
 
-export default function App() {
-  const [activeTab, setActiveTab] = useState('home');
-  const [selectedFolderId, setSelectedFolderId] = useState(null);
-  const [selectedQuestionId, setSelectedQuestionId] = useState(null);
-  const [isFlashcardMode, setIsFlashcardMode] = useState(false);
-  const [showPvP, setShowPvP] = useState(false);
+export default function PvPBattle({ leaderboard, currentUid, questions, userProfile, folders = [], gainXP, setUserProfile }) {
+  const [battleState, setBattleState] = useState(null);
+  const [waitingTarget, setWaitingTarget] = useState(null);
+  const [showShop, setShowShop] = useState(false);
 
-  const [userProfile, setUserProfile] = useState(() => {
-    const saved = localStorage.getItem('study_app_user_v6');
-    const defaultUid = 'user_' + Date.now() + Math.floor(Math.random()*1000);
-    return saved ? JSON.parse(saved) : { 
-      uid: defaultUid, name: 'チャレンジャー', avatar: '🎓', testDate: '',
-      xp: 0, level: 1, totalPosts: 0, totalChats: 0, hitCount: 0, secretCode: '',
-      weaponId: null, armorId: null, atkBonus: 0, defBonus: 0
-    };
+  // 出題範囲設定
+  const [selectedFolderId, setSelectedFolderId] = useState('all');
+  const [selectedSubject, setSelectedSubject] = useState('all');
+
+  // バトル内ステート
+  const [currentQIndex, setCurrentQIndex] = useState(0);
+  const [inputAnswer, setInputAnswer] = useState('');
+  const [timeLeft, setTimeLeft] = useState(10);
+  const [lastDamageText, setLastDamageText] = useState('');
+
+  // レベルに基づく基礎ステータス計算
+  const level = userProfile.level || 1;
+  const maxHp = 1000 + (level * 100);
+  const baseAtk = level * 10;
+
+  // 装備補正値
+  const equippedWeapon = SHOP_ITEMS.find(i => i.id === userProfile.weaponId);
+  const equippedArmor = SHOP_ITEMS.find(i => i.id === userProfile.armorId);
+  const totalAtk = baseAtk + (equippedWeapon?.atkBonus || 0);
+  const totalDef = equippedArmor?.defBonus || 0;
+
+  useEffect(() => {
+    if (!userProfile.uid) return;
+    const unsub = onSnapshot(doc(db, 'pvp_battles', userProfile.uid), (snapshot) => {
+      if (snapshot.exists()) {
+        setBattleState(snapshot.data());
+      } else {
+        setBattleState(null);
+      }
+    });
+    return () => unsub();
+  }, [userProfile.uid]);
+
+  const activeQuestions = questions.filter(q => {
+    const matchFolder = !battleState?.targetFolderId || battleState.targetFolderId === 'all' || q.folderId === battleState.targetFolderId;
+    const matchSubject = !battleState?.targetSubject || battleState.targetSubject === 'all' || q.subject === battleState.targetSubject;
+    return matchFolder && matchSubject;
   });
 
-  const [showProfileModal, setShowProfileModal] = useState(false);
-  const [showHelpModal, setShowHelpModal] = useState(false);
-  const [showQrModal, setShowQrModal] = useState(false);
-  const [showHistoryModal, setShowHistoryModal] = useState(false);
-  const [showMemberList, setShowMemberList] = useState(false);
-  const [showMenuDrawer, setShowMenuDrawer] = useState(false);
-  const [tempCode, setTempCode] = useState('');
-
-  const [histVersion, setHistVersion] = useState('');
-  const [histTitle, setHistTitle] = useState('');
-  const [histDesc, setHistDesc] = useState('');
-  const [editingHistId, setEditingHistId] = useState(null);
-
-  const [folders, setFolders] = useState([]);
-  const [questions, setQuestions] = useState([]);
-  const [leaderboard, setLeaderboard] = useState([]);
-  const [historyList, setHistoryList] = useState([]);
-  const [isAdmin, setIsAdmin] = useState(false);
-
   useEffect(() => {
-    if (!userProfile.secretCode) return;
-    const unsub = onSnapshot(collection(db, 'folders'), (snapshot) => {
-      const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      setFolders(data.filter(d => d.secretCode === userProfile.secretCode));
-    });
-    return () => unsub();
-  }, [userProfile.secretCode]);
-
-  useEffect(() => {
-    if (!userProfile.secretCode) return;
-    const unsub = onSnapshot(collection(db, 'questions'), (snapshot) => {
-      const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      setQuestions(data.filter(d => d.secretCode === userProfile.secretCode));
-    });
-    return () => unsub();
-  }, [userProfile.secretCode]);
-
-  useEffect(() => {
-    if (!userProfile.secretCode) return;
-    const q = query(collection(db, 'users'), orderBy('xp', 'desc'));
-    const unsub = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      const groupUsers = data.filter(d => d.secretCode === userProfile.secretCode);
-      
-      const me = groupUsers.find(u => u.uid === userProfile.uid);
-      if (me && me.isKicked && !isAdmin) {
-        alert('管理者によってこのグループから退去処理されました。');
-        setUserProfile(prev => ({ ...prev, secretCode: '' }));
-      }
-      setLeaderboard(groupUsers.slice(0, 30));
-    });
-    return () => unsub();
-  }, [userProfile.secretCode, userProfile.uid, isAdmin]);
-
-  useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'app_history'), (snapshot) => {
-      const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      data.sort((a, b) => (b.order || 0) - (a.order || 0));
-      setHistoryList(data);
-    });
-    return () => unsub();
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem('study_app_user_v6', JSON.stringify(userProfile));
-    if (userProfile.uid && userProfile.secretCode) {
-      setDoc(doc(db, 'users', userProfile.uid), userProfile, { merge: true }).catch(console.error);
-    }
-  }, [userProfile]);
-
-  const gainXP = (amount, statKey) => {
-    setUserProfile(prev => {
-      const newXp = (prev.xp || 0) + amount;
-      const newLevel = Math.floor(newXp / 100) + 1;
-      const updates = { xp: newXp, level: newLevel };
-      if (statKey) updates[statKey] = (prev[statKey] || 0) + 1;
-      return { ...prev, ...updates };
-    });
-  };
-
-  const handleKickUser = async (targetUid, targetName) => {
-    if (!isAdmin) return;
-    if (window.confirm(`「${targetName}」をグループから追放（BAN）しますか？`)) {
-      try {
-        await updateDoc(doc(db, 'users', targetUid), { isKicked: true });
-        alert('追放しました');
-      } catch (err) {
-        alert('追放に失敗しました');
-      }
-    }
-  };
-
-  const handleSaveHistory = async (e) => {
-    e.preventDefault();
-    if (!histTitle.trim()) return;
-
-    try {
-      if (editingHistId) {
-        await updateDoc(doc(db, 'app_history', editingHistId), {
-          version: histVersion || 'v1.0',
-          title: histTitle,
-          desc: histDesc
-        });
-        setEditingHistId(null);
-        alert('歴史を更新しました！');
-      } else {
-        await addDoc(collection(db, 'app_history'), {
-          version: histVersion || 'v1.0',
-          title: histTitle,
-          desc: histDesc,
-          date: new Date().toLocaleDateString('ja-JP'),
-          order: Date.now()
-        });
-        alert('新しい歴史を追加しました！');
-      }
-      setHistVersion('');
-      setHistTitle('');
-      setHistDesc('');
-    } catch (err) {
-      alert('保存に失敗しました');
-    }
-  };
-
-  const handleDeleteHistory = async (id) => {
-    if (!isAdmin) return;
-    if (window.confirm('この歴史の項目を削除しますか？')) {
-      try {
-        await deleteDoc(doc(db, 'app_history', id));
-      } catch (err) {
-        alert('削除に失敗しました');
-      }
-    }
-  };
-
-  const getDaysUntilTest = () => {
-    if (!userProfile.testDate) return null;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const diffTime = new Date(userProfile.testDate) - today;
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  };
-
-  const daysLeft = getDaysUntilTest();
-
-  if (!userProfile.secretCode) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-amber-100 via-orange-100 to-amber-200 flex items-center justify-center p-4">
-        <div className="bg-white/90 backdrop-blur-md p-8 rounded-3xl border border-amber-200 shadow-xl max-w-sm w-full text-center space-y-6">
-          <div className="bg-gradient-to-tr from-amber-400 to-orange-500 w-20 h-20 mx-auto rounded-3xl flex items-center justify-center shadow-lg shadow-orange-500/20">
-            <BookOpen className="w-10 h-10 text-white" />
-          </div>
-          <h1 className="text-2xl font-black text-amber-600">YOSO</h1>
-          <p className="text-xs font-bold text-stone-600 leading-relaxed">
-            同じ合言葉を入力して<br/>仲間と予想問題を共有しよう！
-          </p>
-          <form onSubmit={(e) => { e.preventDefault(); if(tempCode.trim()) setUserProfile({...userProfile, secretCode: tempCode.trim()}); }}>
-            <input 
-              type="text" 
-              required 
-              value={tempCode} 
-              onChange={e => setTempCode(e.target.value)} 
-              placeholder="例: room2026" 
-              className="w-full bg-amber-50/50 border-2 border-amber-200 focus:border-amber-500 p-4 rounded-2xl text-center text-lg font-black outline-none text-stone-800 transition mb-4 shadow-inner" 
-            />
-            <button type="submit" className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white py-4 rounded-2xl font-black shadow-lg shadow-amber-500/30 transition">
-              ルームに入る
-            </button>
-          </form>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-gradient-to-b from-amber-50/60 via-orange-50/30 to-amber-100/40 text-stone-800 flex flex-col font-sans pb-24">
-      {/* ヘッダー */}
-      <header className="bg-white/80 backdrop-blur-md sticky top-0 z-30 border-b border-amber-200/60 px-4 py-3 flex justify-between items-center shadow-sm">
-        <div className="flex items-center gap-2 cursor-pointer" onClick={() => { setActiveTab('home'); setSelectedQuestionId(null); setIsFlashcardMode(false); setShowPvP(false); }}>
-          <div className="bg-gradient-to-tr from-amber-400 to-orange-500 p-2 rounded-2xl shadow-sm"><BookOpen className="w-5 h-5 text-white" /></div>
-          <h1 className="font-black text-xl tracking-wider bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">YOSO</h1>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button onClick={() => setShowProfileModal(true)} className="bg-amber-100 hover:bg-amber-200 text-amber-900 px-3 py-1.5 rounded-full text-xs font-bold border border-amber-200 flex items-center gap-2 shadow-sm transition">
-            <span className="bg-amber-500 text-white px-2 py-0.5 rounded-full text-[10px] font-black">Lv.{userProfile.level}</span>
-            <span className="truncate max-w-[90px]">{userProfile.avatar} {userProfile.name}</span>
-          </button>
-          <button onClick={() => setShowMenuDrawer(true)} className="p-2 bg-amber-100 hover:bg-amber-200 rounded-2xl text-amber-900 transition"><Menu className="w-5 h-5" /></button>
-        </div>
-      </header>
-
-      {/* ドロワー */}
-      {showMenuDrawer && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex justify-end">
-          <div className="bg-white w-64 h-full p-6 space-y-6 flex flex-col justify-between border-l border-amber-200 shadow-2xl">
-            <div className="space-y-4">
-              <div className="flex justify-between items-center border-b border-amber-100 pb-3">
-                <h3 className="font-extrabold text-sm text-stone-700">メニュー</h3>
-                <button onClick={() => setShowMenuDrawer(false)} className="text-stone-400 hover:text-stone-700"><X className="w-5 h-5"/></button>
-              </div>
-              <div className="space-y-2">
-                <button onClick={() => { setShowQrModal(true); setShowMenuDrawer(false); }} className="w-full text-left p-3 bg-amber-50 hover:bg-amber-100 rounded-2xl text-xs font-extrabold flex items-center gap-2 text-orange-600"><QrCode className="w-4 h-4"/> 招待QRを表示</button>
-                <button onClick={() => { setShowMemberList(true); setShowMenuDrawer(false); }} className="w-full text-left p-3 bg-amber-50 hover:bg-amber-100 rounded-2xl text-xs font-extrabold flex items-center gap-2 text-indigo-600"><Users className="w-4 h-4"/> メンバー一覧</button>
-                <button onClick={() => { setShowHistoryModal(true); setShowMenuDrawer(false); }} className="w-full text-left p-3 bg-amber-50 hover:bg-amber-100 rounded-2xl text-xs font-extrabold flex items-center gap-2 text-purple-600"><History className="w-4 h-4"/> アプリの歴史</button>
-                <button onClick={() => { setShowHelpModal(true); setShowMenuDrawer(false); }} className="w-full text-left p-3 bg-amber-50 hover:bg-amber-100 rounded-2xl text-xs font-extrabold flex items-center gap-2 text-amber-600"><HelpCircle className="w-4 h-4"/> 使い方・ルール</button>
-              </div>
-            </div>
-            <button onClick={() => { if(window.confirm('グループから退出しますか？')) { setUserProfile({...userProfile, secretCode: ''}); setShowMenuDrawer(false); } }} className="w-full py-3 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-2xl text-xs font-black flex items-center justify-center gap-1 border border-rose-200"><LogOut className="w-4 h-4"/> 部屋を出る</button>
-          </div>
-        </div>
-      )}
-
-      {/* メインビュー */}
-      <main className="max-w-4xl mx-auto p-4 flex-1 w-full space-y-4">
-        {daysLeft !== null && !selectedQuestionId && !isFlashcardMode && (
-          <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white p-5 rounded-3xl shadow-xl border border-amber-300 relative overflow-hidden flex justify-between items-center px-6">
-            <div className="space-y-1">
-              <div className="flex items-center gap-1.5 font-black text-xs text-amber-100">
-                <Calendar className="w-4 h-4 text-amber-200"/> テスト本番まで
-              </div>
-              <div className="text-2xl font-black tracking-tight">
-                {daysLeft > 0 ? (
-                  <span>あと <span className="text-4xl text-yellow-200 font-extrabold">{daysLeft}</span> 日</span>
-                ) : daysLeft === 0 ? (
-                  <span className="text-2xl text-yellow-200">🔥 今日がテスト本番！</span>
-                ) : (
-                  <span>テスト終了</span>
-                )}
-              </div>
-            </div>
-            <div className="text-5xl opacity-20">🎯</div>
-          </div>
-        )}
-
-        {selectedQuestionId ? (
-          <QuestionDetailView 
-            question={questions.find(q => q.id === selectedQuestionId)} 
-            currentUid={userProfile.uid}
-            onBack={() => setSelectedQuestionId(null)}
-            onAddComment={async (qId, text) => {
-              const q = questions.find(item => item.id === qId);
-              await updateDoc(doc(db, 'questions', qId), {
-                comments: [...(q.comments || []), { id: 'c_' + Date.now(), user: userProfile.name, text }]
-              });
-              gainXP(5, null);
-            }}
-          />
-        ) : isFlashcardMode ? (
-          <FlashcardView questions={questions} folders={folders} onBack={() => setIsFlashcardMode(false)} />
-        ) : (
-          <>
-            {activeTab === 'home' && (
-              <div className="space-y-6">
-                {showPvP ? (
-                  <div className="space-y-3">
-                    <button onClick={() => setShowPvP(false)} className="text-xs font-bold text-amber-600 bg-white border border-amber-200 px-3 py-1 rounded-full shadow-sm">
-                      ← 通常モードに戻る
-                    </button>
-                    <PvPBattle 
-                      leaderboard={leaderboard} 
-                      currentUid={userProfile.uid} 
-                      questions={questions} 
-                      userProfile={userProfile} 
-                      folders={folders}
-                      gainXP={gainXP} 
-                      setUserProfile={setUserProfile}
-                    />
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center">
-                      <h3 className="text-sm font-black text-stone-800">📁 フォルダ & 予想問題一覧</h3>
-                      <div className="flex gap-2">
-                        <button onClick={() => setShowPvP(true)} className="bg-gradient-to-r from-amber-500 to-orange-500 text-white px-3 py-1.5 rounded-xl text-xs font-black shadow-sm">
-                          ⚔️ 対戦モード
-                        </button>
-                        <button onClick={() => setIsFlashcardMode(true)} className="bg-white border border-amber-300 text-amber-600 px-3 py-1.5 rounded-xl text-xs font-black hover:bg-amber-50 shadow-sm">
-                          🎴 暗記カード
-                        </button>
-                      </div>
-                    </div>
-                    
-                    <FolderAndHitManager 
-                      folders={folders}
-                      questions={questions}
-                      selectedFolderId={selectedFolderId}
-                      onSelectFolder={setSelectedFolderId}
-                      onSelectQuestion={setSelectedQuestionId}
-                      userProfile={userProfile}
-                      gainXP={gainXP}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-            {activeTab === 'create' && <CreateCardView folders={folders} userProfile={userProfile} onSuccess={() => { gainXP(50, 'totalPosts'); setActiveTab('home'); }} />}
-            {activeTab === 'chat' && <ChatView userProfile={userProfile} onMessageSent={() => gainXP(10, 'totalChats')} />}
-            {activeTab === 'ranking' && <RankingView leaderboard={leaderboard} currentUid={userProfile.uid} />}
-          </>
-        )}
-      </main>
-
-      {/* フッターナビ */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-amber-200 p-2 z-30 flex justify-around shadow-lg rounded-t-3xl">
-        <NavBtn active={activeTab === 'home'} icon={<Home className="w-6 h-6" />} label="ホーム" onClick={() => { setActiveTab('home'); setSelectedQuestionId(null); setIsFlashcardMode(false); setShowPvP(false); }} />
-        <NavBtn active={activeTab === 'create'} icon={<PlusCircle className="w-6 h-6" />} label="問題作成" onClick={() => { setActiveTab('create'); setSelectedQuestionId(null); setIsFlashcardMode(false); setShowPvP(false); }} />
-        <NavBtn active={activeTab === 'chat'} icon={<MessageCircle className="w-6 h-6" />} label="チャット" onClick={() => { setActiveTab('chat'); setSelectedQuestionId(null); setIsFlashcardMode(false); setShowPvP(false); }} />
-        <NavBtn active={activeTab === 'ranking'} icon={<Trophy className="w-6 h-6" />} label="順位" onClick={() => { setActiveTab('ranking'); setSelectedQuestionId(null); setIsFlashcardMode(false); setShowPvP(false); }} />
-      </nav>
-
-      {/* モーダル */}
-      {showProfileModal && (
-        <UserProfileModal 
-          userProfile={userProfile} 
-          setUserProfile={setUserProfile} 
-          badges={BADGES} 
-          onClose={() => setShowProfileModal(false)} 
-        />
-      )}
-
-      {showMemberList && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white p-6 rounded-3xl max-w-sm w-full border border-amber-200 shadow-2xl flex flex-col max-h-[80vh]">
-            <div className="flex justify-between items-center border-b border-amber-100 pb-3 mb-3">
-              <h3 className="font-black text-lg text-stone-800 flex items-center gap-2"><Users className="w-5 h-5 text-indigo-500"/> 参加メンバー</h3>
-              {!isAdmin && (
-                <button onClick={() => { const pwd = window.prompt('管理者パスワード:'); if (pwd === ADMIN_PASSWORD) setIsAdmin(true); }} className="text-[10px] text-stone-400 underline font-bold">🔑 管理者</button>
-              )}
-            </div>
-            <div className="overflow-y-auto space-y-2 flex-1 pr-1">
-              {leaderboard.map(u => (
-                <div key={u.uid} className="bg-amber-50/50 p-3 rounded-2xl flex items-center justify-between border border-amber-100">
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl">{u.avatar || '🎓'}</span>
-                    <div>
-                      <div className="text-xs font-extrabold text-stone-800">{u.name}</div>
-                      <div className="text-[10px] text-amber-600 font-bold">Lv.{u.level || 1} • {u.xp || 0} XP</div>
-                    </div>
-                  </div>
-                  {isAdmin && u.uid !== userProfile.uid && (
-                    <button onClick={() => handleKickUser(u.uid, u.name)} className="text-[10px] font-black bg-rose-500 text-white px-2.5 py-1.5 rounded-xl shadow-sm flex items-center gap-1 hover:bg-rose-600 transition">
-                      <ShieldAlert className="w-3 h-3"/> 追放
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-            <button onClick={() => setShowMemberList(false)} className="mt-4 w-full bg-stone-100 hover:bg-stone-200 text-stone-700 py-2.5 rounded-xl font-bold text-xs">閉じる</button>
-          </div>
-        </div>
-      )}
-
-      {showHistoryModal && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white p-6 rounded-3xl max-w-sm w-full border border-amber-200 text-stone-800 space-y-4 max-h-[85vh] flex flex-col shadow-2xl">
-            <div className="flex justify-between items-center border-b border-amber-100 pb-3">
-              <h3 className="font-black text-base text-purple-600">アプリの歴史</h3>
-              {!isAdmin && <button onClick={() => { const pwd = window.prompt('管理者パスワード:'); if (pwd === ADMIN_PASSWORD) setIsAdmin(true); }} className="text-[10px] text-stone-400 underline font-bold">🔑 管理者</button>}
-            </div>
-
-            {isAdmin && (
-              <form onSubmit={handleSaveHistory} className="bg-purple-50 p-3 rounded-2xl border border-purple-200 space-y-2 text-xs">
-                <div className="font-extrabold text-purple-800 flex justify-between items-center">
-                  <span>{editingHistId ? '✏️ 歴史の編集' : '＋ 新しい歴史を追加'}</span>
-                  {editingHistId && <button type="button" onClick={() => { setEditingHistId(null); setHistVersion(''); setHistTitle(''); setHistDesc(''); }} className="text-[10px] text-rose-500 underline">キャンセル</button>}
-                </div>
-                <input type="text" placeholder="バージョン (例: v2.1)" value={histVersion} onChange={e => setHistVersion(e.target.value)} className="w-full p-2 bg-white rounded-lg border border-purple-200 text-xs outline-none" />
-                <input type="text" required placeholder="タイトル" value={histTitle} onChange={e => setHistTitle(e.target.value)} className="w-full p-2 bg-white rounded-lg border border-purple-200 text-xs outline-none font-bold" />
-                <textarea placeholder="アップデート内容の詳細" value={histDesc} onChange={e => setHistDesc(e.target.value)} className="w-full p-2 bg-white rounded-lg border border-purple-200 text-xs outline-none h-16" />
-                <button type="submit" className="w-full bg-purple-600 text-white py-1.5 rounded-lg font-black text-xs shadow-sm">
-                  {editingHistId ? '更新を保存' : '歴史に刻む'}
-                </button>
-              </form>
-            )}
-
-            <div className="overflow-y-auto space-y-3 flex-1 pr-1">
-              {historyList.map(item => (
-                <div key={item.id} className="border-l-2 border-purple-400 pl-3 py-1 space-y-0.5 relative group">
-                  <div className="flex justify-between items-center text-[10px] font-black text-purple-600">
-                    <span>{item.version} ({item.date})</span>
-                    {isAdmin && (
-                      <div className="flex gap-2">
-                        <button onClick={() => { setEditingHistId(item.id); setHistVersion(item.version || ''); setHistTitle(item.title || ''); setHistDesc(item.desc || ''); }} className="text-indigo-600 font-bold flex items-center gap-0.5"><Edit className="w-3 h-3"/>編集</button>
-                        <button onClick={() => handleDeleteHistory(item.id)} className="text-rose-500 font-bold flex items-center gap-0.5"><Trash2 className="w-3 h-3"/>削除</button>
-                      </div>
-                    )}
-                  </div>
-                  <h4 className="font-black text-xs text-stone-800">{item.title}</h4>
-                  <p className="text-[10px] text-stone-500 font-bold">{item.desc}</p>
-                </div>
-              ))}
-            </div>
-            <button onClick={() => setShowHistoryModal(false)} className="bg-purple-500 hover:bg-purple-600 text-white w-full py-2.5 rounded-xl font-black text-xs shadow-md">閉じる</button>
-          </div>
-        </div>
-      )}
-
-      {showQrModal && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white p-6 rounded-3xl max-w-sm w-full border border-amber-200 text-center space-y-4 shadow-2xl">
-            <h3 className="font-extrabold text-lg text-amber-600 flex items-center justify-center gap-2"><QrCode className="w-5 h-5"/> 招待QR</h3>
-            <div className="bg-amber-50 p-4 rounded-2xl inline-block my-2 border border-amber-100"><img src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(userProfile.secretCode)}`} alt="QR" className="w-40 h-40"/></div>
-            <div className="bg-amber-100/60 px-4 py-2 rounded-xl text-xs font-extrabold text-stone-700 flex justify-between items-center"><span>合言葉:</span><span className="text-amber-600 text-sm font-black">{userProfile.secretCode}</span></div>
-            <button onClick={() => setShowQrModal(false)} className="w-full bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-xl font-black text-xs shadow-md">閉じる</button>
-          </div>
-        </div>
-      )}
-
-      {showHelpModal && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white p-6 rounded-3xl max-w-sm w-full border border-amber-200 text-stone-800 shadow-2xl space-y-4">
-            <h3 className="font-black text-lg text-center text-amber-600 border-b border-amber-100 pb-3">使い方ガイド</h3>
-            <p className="text-xs text-stone-600 leading-relaxed font-bold">1. クラスやグループの予想問題を投稿・整理！<br/>2. 暗記カード機能でサクサクテスト対策。<br/>3. お楽しみ機能として対戦モードも遊べます！</p>
-            <button onClick={() => setShowHelpModal(false)} className="w-full bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-xl font-black text-xs shadow-md">閉じる</button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function CreateCardView({ folders, userProfile, onSuccess }) {
-  const [subject, setSubject] = useState(SUBJECTS[0]);
-  const [folderId, setFolderId] = useState('');
-  const [subQuestions, setSubQuestions] = useState([{ question: '', answer: '' }]);
-
-  const handleAddSub = () => {
-    setSubQuestions([...subQuestions, { question: '', answer: '' }]);
-  };
-
-  const handleRemoveSub = (index) => {
-    if (subQuestions.length === 1) return;
-    setSubQuestions(subQuestions.filter((_, i) => i !== index));
-  };
-
-  const handleSubChange = (index, field, value) => {
-    const updated = [...subQuestions];
-    updated[index][field] = value;
-    setSubQuestions(updated);
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!subQuestions[0].question.trim()) return;
-
-    try {
-      await addDoc(collection(db, 'questions'), {
-        subject, folderId, author: userProfile.name, avatar: userProfile.avatar, uid: userProfile.uid, secretCode: userProfile.secretCode,
-        subQuestions, comments: [], createdAt: Date.now()
+    if (battleState?.status !== 'playing') return;
+    const timer = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          nextQuestion();
+          return 10;
+        }
+        return prev - 1;
       });
-      onSuccess();
-    } catch (err) { alert('作成失敗'); }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [battleState?.status, currentQIndex, activeQuestions.length]);
+
+  const handleBuyItem = (item) => {
+    if ((userProfile.xp || 0) < item.cost) {
+      alert('XPが足りません！問題作成やチャットでXPを溜めよう。');
+      return;
+    }
+
+    const isWeapon = item.type === 'weapon';
+    const key = isWeapon ? 'weaponId' : 'armorId';
+    const bonusKey = isWeapon ? 'atkBonus' : 'defBonus';
+    const bonusValue = isWeapon ? item.atkBonus : item.defBonus;
+
+    setUserProfile(prev => ({
+      ...prev,
+      xp: prev.xp - item.cost,
+      [key]: item.id,
+      [bonusKey]: bonusValue
+    }));
+    alert(`「${item.name}」を購入・装備しました！`);
   };
 
+  const handleInvite = async (targetUser) => {
+    const newBattleId = `battle_${Date.now()}`;
+    setWaitingTarget(targetUser);
+
+    const folderObj = folders.find(f => f.id === selectedFolderId);
+    const rangeName = `${folderObj ? '📁 ' + folderObj.name : '全フォルダ'} / ${selectedSubject !== 'all' ? '📚 ' + selectedSubject : '全教科'}`;
+
+    const initBattleData = {
+      battleId: newBattleId,
+      status: 'waiting',
+      hostUid: userProfile.uid,
+      hostName: userProfile.name,
+      hostHp: maxHp,
+      hostMaxHp: maxHp,
+      hostAtk: totalAtk,
+      hostDef: totalDef,
+      guestUid: targetUser.uid,
+      guestName: targetUser.name,
+      guestHp: 1000 + ((targetUser.level || 1) * 100),
+      guestMaxHp: 1000 + ((targetUser.level || 1) * 100),
+      guestAtk: (targetUser.level || 1) * 10 + (targetUser.atkBonus || 0),
+      guestDef: targetUser.defBonus || 0,
+      targetFolderId: selectedFolderId,
+      targetSubject: selectedSubject,
+      rangeName: rangeName
+    };
+
+    await setDoc(doc(db, 'pvp_battles', userProfile.uid), { ...initBattleData, role: 'host', opponentUid: targetUser.uid, opponentName: targetUser.name });
+    await setDoc(doc(db, 'pvp_battles', targetUser.uid), { ...initBattleData, status: 'invited', role: 'guest', opponentUid: userProfile.uid, opponentName: userProfile.name });
+  };
+
+  const handleAccept = async () => {
+    if (!battleState) return;
+    await updateDoc(doc(db, 'pvp_battles', userProfile.uid), { status: 'playing' });
+    await updateDoc(doc(db, 'pvp_battles', battleState.opponentUid), { status: 'playing' });
+  };
+
+  const handleCancel = async () => {
+    if (battleState?.opponentUid) {
+      await setDoc(doc(db, 'pvp_battles', battleState.opponentUid), {});
+    }
+    await setDoc(doc(db, 'pvp_battles', userProfile.uid), {});
+    setWaitingTarget(null);
+  };
+
+  const nextQuestion = () => {
+    setInputAnswer('');
+    setTimeLeft(10);
+    const total = activeQuestions.length || 1;
+    setCurrentQIndex(prev => (prev + 1) % total);
+  };
+
+  const handleAnswerSubmit = async (e) => {
+    e.preventDefault();
+    if (activeQuestions.length === 0) return;
+
+    const activeQ = activeQuestions[currentQIndex % activeQuestions.length];
+    const correctAnswer = activeQ?.subQuestions?.[0]?.answer || '';
+
+    if (inputAnswer.trim() === correctAnswer.trim()) {
+      const speedBonus = timeLeft * 20;
+      const rawDamage = 150 + totalAtk + speedBonus;
+      const isHost = battleState.role === 'host';
+      const opponentDef = isHost ? (battleState.guestDef || 0) : (battleState.hostDef || 0);
+      const finalDamage = Math.max(30, rawDamage - opponentDef);
+
+      setLastDamageText(`⚡ FAST! ${finalDamage} ダメージ！（攻撃+${totalAtk}）`);
+
+      const targetHpKey = isHost ? 'guestHp' : 'hostHp';
+      const currentOpponentHp = isHost ? (battleState.guestHp ?? 1000) : (battleState.hostHp ?? 1000);
+      const newOpponentHp = Math.max(0, currentOpponentHp - finalDamage);
+
+      const updateObj = { [targetHpKey]: newOpponentHp };
+
+      if (newOpponentHp <= 0) {
+        updateObj.status = 'finished';
+        updateObj.winner = userProfile.name;
+        gainXP(150, null);
+      }
+
+      await updateDoc(doc(db, 'pvp_battles', userProfile.uid), updateObj);
+      await updateDoc(doc(db, 'pvp_battles', battleState.opponentUid), updateObj);
+
+      setTimeout(() => setLastDamageText(''), 2000);
+    } else {
+      setLastDamageText('❌ 不正解！');
+      setTimeout(() => setLastDamageText(''), 1500);
+    }
+
+    nextQuestion();
+  };
+
+  const currentQ = activeQuestions[currentQIndex % (activeQuestions.length || 1)];
+  const myHp = battleState?.role === 'host' ? battleState?.hostHp : battleState?.guestHp;
+  const myMaxHp = battleState?.role === 'host' ? battleState?.hostMaxHp : battleState?.guestMaxHp;
+  const opponentHp = battleState?.role === 'host' ? battleState?.guestHp : battleState?.hostHp;
+  const opponentMaxHp = battleState?.role === 'host' ? battleState?.guestMaxHp : battleState?.hostMaxHp;
+
   return (
-    <form onSubmit={handleSubmit} className="bg-white p-6 rounded-3xl space-y-4 border border-amber-200 max-w-xl mx-auto shadow-lg">
-      <h2 className="text-lg font-black text-amber-600 flex items-center gap-2"><PlusCircle className="w-5 h-5"/> 新しい予想問題を投稿</h2>
-      
-      <div className="grid grid-cols-2 gap-2">
-        <select value={subject} onChange={e => setSubject(e.target.value)} className="bg-amber-50/50 border border-amber-200 p-3 rounded-xl text-xs font-bold text-stone-800">
-          {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
-        <select value={folderId} onChange={e => setFolderId(e.target.value)} className="bg-amber-50/50 border border-amber-200 p-3 rounded-xl text-xs font-bold text-stone-800">
-          <option value="">フォルダ選択（なし）</option>
-          {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-        </select>
-      </div>
-
-      <div className="space-y-3 pt-2">
-        {subQuestions.map((sub, idx) => (
-          <div key={idx} className="p-3 bg-amber-50/40 border border-amber-200 rounded-2xl space-y-2 relative">
-            <div className="flex justify-between items-center text-xs font-bold text-amber-800">
-              <span>小問 {idx + 1}</span>
-              {subQuestions.length > 1 && (
-                <button type="button" onClick={() => handleRemoveSub(idx)} className="text-rose-500 hover:text-rose-700"><Trash2 className="w-4 h-4"/></button>
-              )}
-            </div>
-            <input 
-              type="text" 
-              required 
-              value={sub.question} 
-              onChange={e => handleSubChange(idx, 'question', e.target.value)} 
-              placeholder={`問題 ${idx + 1} を入力...`} 
-              className="w-full bg-white border border-amber-200 p-2.5 rounded-xl text-xs font-bold text-stone-800 outline-none focus:border-amber-400" 
-            />
-            <input 
-              type="text" 
-              required 
-              value={sub.answer} 
-              onChange={e => handleSubChange(idx, 'answer', e.target.value)} 
-              placeholder={`解答 ${idx + 1} を入力...`} 
-              className="w-full bg-white border border-amber-200 p-2.5 rounded-xl text-xs font-bold text-rose-600 outline-none focus:border-rose-400" 
-            />
-          </div>
-        ))}
-
+    <div className="bg-white p-5 rounded-3xl border border-amber-200 space-y-4 shadow-md">
+      <div className="flex items-center justify-between border-b border-amber-100 pb-3">
+        <div className="flex items-center gap-2">
+          <Swords className="w-5 h-5 text-amber-500" />
+          <h3 className="font-black text-base text-stone-800">1対1 リアルタイム対戦</h3>
+        </div>
         <button 
-          type="button" 
-          onClick={handleAddSub} 
-          className="w-full py-2 bg-amber-100 hover:bg-amber-200 text-amber-800 rounded-xl text-xs font-black flex items-center justify-center gap-1 border border-amber-200 transition"
+          onClick={() => setShowShop(!showShop)} 
+          className="bg-amber-100 hover:bg-amber-200 text-amber-900 px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1 transition"
         >
-          <Plus className="w-4 h-4"/> 小問を追加する
+          <ShoppingBag className="w-3.5 h-3.5 text-amber-600" />
+          {showShop ? '対戦に戻る' : '装備ショップ'}
         </button>
       </div>
 
-      <button type="submit" className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-white py-3.5 rounded-xl font-black text-xs shadow-md shadow-amber-500/20">
-        投稿する (+50 XP)
-      </button>
-    </form>
-  );
-}
-
-function ChatView({ userProfile, onMessageSent }) {
-  const [messages, setMessages] = useState([]);
-  const [newMessage, setNewMessage] = useState('');
-
-  useEffect(() => {
-    if (!userProfile.secretCode) return;
-    const unsub = onSnapshot(collection(db, 'chats'), (snapshot) => {
-      let msgs = snapshot.docs.map(d => ({ id: d.id, ...d.data() })).filter(d => d.secretCode === userProfile.secretCode);
-      msgs.sort((a, b) => (a.createdAt?.toMillis?.() || Date.now()) - (b.createdAt?.toMillis?.() || Date.now()));
-      setMessages(msgs);
-    });
-    return () => unsub();
-  }, [userProfile.secretCode]);
-
-  const handleSend = async (e) => {
-    e.preventDefault();
-    if (!newMessage.trim()) return;
-    try {
-      await addDoc(collection(db, 'chats'), { text: newMessage, user: userProfile.name, avatar: userProfile.avatar, uid: userProfile.uid, secretCode: userProfile.secretCode, createdAt: serverTimestamp() });
-      setNewMessage('');
-      onMessageSent();
-    } catch (err) {}
-  };
-
-  return (
-    <div className="flex flex-col space-y-3 h-[calc(100vh-160px)]">
-      <h2 className="text-base font-black text-stone-800 flex items-center gap-2"><MessageCircle className="w-5 h-5 text-amber-500"/> チャット</h2>
-      <div className="flex-1 bg-white rounded-3xl border border-amber-200 p-4 overflow-y-auto space-y-3 shadow-inner">
-        {messages.map(msg => (
-          <div key={msg.id} className={`flex gap-2 ${msg.uid === userProfile.uid ? 'flex-row-reverse' : 'flex-row'}`}>
-            <span className="text-xl">{msg.avatar || '🎓'}</span>
-            <div className={`p-3 rounded-2xl text-xs font-bold ${msg.uid === userProfile.uid ? 'bg-amber-500 text-white shadow-sm' : 'bg-amber-100/70 text-stone-800'}`}>{msg.text}</div>
+      {showShop ? (
+        <div className="space-y-4 animate-fade-in">
+          <div className="bg-amber-50/80 p-3 rounded-2xl border border-amber-200 flex justify-between items-center text-xs font-black">
+            <span>所持XP: <span className="text-amber-600">{userProfile.xp || 0} XP</span></span>
+            <span>Lv.{level} ステータス: HP+{level*100} / ATK+{baseAtk}</span>
           </div>
-        ))}
-      </div>
-      <form onSubmit={handleSend} className="flex gap-2">
-        <input type="text" value={newMessage} onChange={e => setNewMessage(e.target.value)} placeholder="メッセージを入力..." className="flex-1 bg-white border border-amber-200 p-3 rounded-2xl text-xs font-bold text-stone-800 outline-none focus:border-amber-400 shadow-sm" />
-        <button type="submit" className="bg-amber-500 hover:bg-amber-600 text-white p-3 rounded-2xl font-black shadow-md"><Send className="w-4 h-4"/></button>
-      </form>
-    </div>
-  );
-}
 
-// 戦闘力（Power）ランキング画面
-function RankingView({ leaderboard, currentUid }) {
-  const sortedByPower = [...leaderboard].map(u => {
-    const lvl = u.level || 1;
-    const power = (lvl * 100) + (u.atkBonus || 0) + (u.defBonus || 0);
-    return { ...u, power };
-  }).sort((a, b) => b.power - a.power);
-
-  return (
-    <div className="space-y-4">
-      <h2 className="text-lg font-black text-stone-800 flex items-center gap-2">
-        <Trophy className="w-5 h-5 text-amber-500"/> 戦闘力ランキング
-      </h2>
-      <div className="space-y-2">
-        {sortedByPower.map((u, i) => (
-          <div key={u.uid} className="bg-white p-3.5 rounded-2xl flex items-center justify-between border border-amber-200/80 shadow-sm">
-            <div className="flex items-center gap-3">
-              <span className="font-black text-sm text-stone-400">{i+1}</span>
-              <span className="text-2xl">{u.avatar || '🎓'}</span>
-              <div>
-                <div className="text-xs font-extrabold text-stone-800">
-                  {u.name} {u.uid === currentUid && <span className="text-[9px] bg-amber-500 text-white px-1.5 py-0.5 rounded-md font-black">あなた</span>}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-72 overflow-y-auto pr-1">
+            {SHOP_ITEMS.map(item => {
+              const ItemIcon = item.icon;
+              const isEquipped = (item.type === 'weapon' && userProfile.weaponId === item.id) || (item.type === 'armor' && userProfile.armorId === item.id);
+              return (
+                <div key={item.id} className="bg-white p-3 rounded-2xl border border-amber-200 flex items-center justify-between shadow-sm">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 bg-amber-100 text-amber-600 rounded-xl">
+                      <ItemIcon className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-black text-stone-800">{item.name}</div>
+                      <div className="text-[10px] text-stone-500 font-bold">
+                        {item.atkBonus ? `攻撃+${item.atkBonus}` : `防御+${item.defBonus}`}
+                      </div>
+                    </div>
+                  </div>
+                  {isEquipped ? (
+                    <span className="bg-emerald-100 text-emerald-700 text-[10px] font-black px-2.5 py-1 rounded-lg">装備中</span>
+                  ) : (
+                    <button 
+                      onClick={() => handleBuyItem(item)} 
+                      className="bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-black px-3 py-1.5 rounded-xl shadow-sm"
+                    >
+                      {item.cost} XP
+                    </button>
+                  )}
                 </div>
-                <div className="text-[10px] font-bold text-amber-600">Lv.{u.level || 1}</div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <>
+          {(!battleState || !battleState.status) && (
+            <div className="space-y-4">
+              <div className="bg-gradient-to-r from-amber-100 to-orange-100 p-3 rounded-2xl border border-amber-200 flex justify-around text-center text-xs font-black">
+                <div>
+                  <div className="text-[10px] text-stone-500">最大HP</div>
+                  <div className="text-emerald-600">{maxHp}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-stone-500">攻撃力</div>
+                  <div className="text-amber-600">{totalAtk}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-stone-500">防御力</div>
+                  <div className="text-indigo-600">{totalDef}</div>
+                </div>
+              </div>
+
+              <div className="bg-amber-50/60 p-3.5 rounded-2xl border border-amber-200 space-y-2">
+                <div className="flex items-center gap-1.5 font-extrabold text-xs text-amber-800">
+                  <Filter className="w-4 h-4 text-amber-500" /> 出題範囲を設定
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <select 
+                    value={selectedFolderId} 
+                    onChange={e => setSelectedFolderId(e.target.value)} 
+                    className="bg-white border border-amber-200 p-2 rounded-xl text-xs font-bold text-stone-800 outline-none focus:border-amber-400 shadow-sm"
+                  >
+                    <option value="all">すべてのフォルダ</option>
+                    {folders.map(f => (
+                      <option key={f.id} value={f.id}>📁 {f.name}</option>
+                    ))}
+                  </select>
+
+                  <select 
+                    value={selectedSubject} 
+                    onChange={e => setSelectedSubject(e.target.value)} 
+                    className="bg-white border border-amber-200 p-2 rounded-xl text-xs font-bold text-stone-800 outline-none focus:border-amber-400 shadow-sm"
+                  >
+                    <option value="all">すべての教科</option>
+                    {SUBJECTS.map(s => (
+                      <option key={s} value={s}>📚 {s}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                <div className="text-[11px] font-extrabold text-stone-500 px-1">対戦相手を選択:</div>
+                {leaderboard.filter(u => u.uid !== currentUid).length === 0 ? (
+                  <div className="text-center py-6 text-stone-400 font-bold text-xs">他に部屋に参加しているメンバーがいません</div>
+                ) : (
+                  leaderboard.filter(u => u.uid !== currentUid).map(u => (
+                    <div key={u.uid} className="bg-amber-50/50 p-3 rounded-2xl flex items-center justify-between border border-amber-100">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center bg-amber-200 text-lg">
+                          {u.customAvatarUrl ? (
+                            <img src={u.customAvatarUrl} alt="avatar" className="w-full h-full object-cover" />
+                          ) : (
+                            <span>{u.avatar || '🎓'}</span>
+                          )}
+                        </div>
+                        <div>
+                          <div className="text-xs font-black text-stone-800">{u.name}</div>
+                          <div className="text-[10px] font-bold text-amber-600">Lv.{u.level || 1} • {u.xp || 0} XP</div>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => handleInvite(u)} 
+                        className="bg-gradient-to-r from-amber-500 to-orange-500 text-white px-4 py-2 rounded-xl text-xs font-black shadow-md transition transform active:scale-95"
+                      >
+                        申し込む ⚔️
+                      </button>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
-            <div className="text-right">
-              <div className="text-xs font-black text-orange-600">⚔️ {u.power} Power</div>
-              <div className="text-[9px] text-stone-400 font-bold">{u.xp || 0} XP</div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+          )}
 
-function NavBtn({ active, icon, label, onClick }) {
-  return (
-    <button onClick={onClick} className={`flex flex-col items-center justify-center w-14 h-12 rounded-2xl transition-all ${active ? 'bg-amber-100 text-amber-600 font-black' : 'text-stone-400'}`}>
-      {icon}<span className="text-[9px] mt-0.5">{label}</span>
-    </button>
+          {battleState?.status === 'invited' && (
+            <div className="bg-amber-50 border-2 border-amber-300 p-4 rounded-2xl text-center space-y-3 animate-bounce">
+              <div className="font-black text-sm text-stone-800">
+                ⚔️ <span className="text-amber-600">{battleState.opponentName}</span> から対戦申し込みが届きました！
+              </div>
+              <div className="text-[11px] font-bold text-stone-600 bg-white/80 py-1.5 px-3 rounded-xl inline-block border border-amber-200">
+                出題範囲: {battleState.rangeName || 'すべて'}
+              </div>
+              <div className="flex justify-center gap-3">
+                <button onClick={handleAccept} className="bg-emerald-500 text-white px-5 py-2 rounded-xl text-xs font-black shadow-md flex items-center gap-1">
+                  <Check className="w-4 h-4"/> 受ける
+                </button>
+                <button onClick={handleCancel} className="bg-rose-500 text-white px-5 py-2 rounded-xl text-xs font-black shadow-md flex items-center gap-1">
+                  <X className="w-4 h-4"/> 断る
+                </button>
+              </div>
+            </div>
+          )}
+
+          {battleState?.status === 'waiting' && (
+            <div className="bg-amber-50/80 border border-amber-200 p-6 rounded-2xl text-center space-y-3">
+              <Clock className="w-8 h-8 text-amber-500 mx-auto animate-spin" />
+              <div className="font-black text-sm text-stone-800">
+                <span className="text-amber-600">{waitingTarget?.name}</span> の応答を待っています…
+              </div>
+              <div className="text-[11px] font-bold text-stone-500">
+                出題範囲: {battleState.rangeName}
+              </div>
+              <button onClick={handleCancel} className="bg-stone-200 text-stone-700 px-4 py-2 rounded-xl text-xs font-bold">
+                キャンセル
+              </button>
+            </div>
+          )}
+
+          {battleState?.status === 'playing' && (
+            <div className="space-y-4 py-2">
+              <div className="grid grid-cols-2 gap-3 bg-amber-50 p-3 rounded-2xl border border-amber-200">
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[11px] font-black text-stone-700">
+                    <span>{userProfile.name}</span>
+                    <span>{myHp ?? maxHp} / {myMaxHp ?? maxHp} HP</span>
+                  </div>
+                  <div className="w-full bg-stone-200 h-3 rounded-full overflow-hidden">
+                    <div className="bg-emerald-500 h-full transition-all duration-300" style={{ width: `${Math.max(0, ((myHp ?? maxHp) / (myMaxHp ?? maxHp)) * 100)}%` }}></div>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[11px] font-black text-stone-700">
+                    <span>{battleState.opponentName}</span>
+                    <span>{opponentHp ?? 1000} / {opponentMaxHp ?? 1000} HP</span>
+                  </div>
+                  <div className="w-full bg-stone-200 h-3 rounded-full overflow-hidden">
+                    <div className="bg-rose-500 h-full transition-all duration-300" style={{ width: `${Math.max(0, ((opponentHp ?? 1000) / (opponentMaxHp ?? 1000)) * 100)}%` }}></div>
+                  </div>
+                </div>
+              </div>
+
+              {lastDamageText && (
+                <div className="text-center font-black text-xs text-amber-600 animate-bounce">
+                  {lastDamageText}
+                </div>
+              )}
+
+              {activeQuestions.length > 0 && currentQ ? (
+                <div className="bg-white border-2 border-amber-300 p-4 rounded-2xl space-y-3 shadow-inner">
+                  <div className="flex justify-between items-center text-xs font-bold">
+                    <span className="bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full font-black">{currentQ.subject}</span>
+                    <span className="text-rose-500 font-black flex items-center gap-1"><Clock className="w-3.5 h-3.5"/> 残り {timeLeft}秒</span>
+                  </div>
+
+                  <div className="font-extrabold text-sm text-stone-800 py-2">
+                    Q. {currentQ.subQuestions?.[0]?.question || '無題'}
+                  </div>
+
+                  <form onSubmit={handleAnswerSubmit} className="flex gap-2">
+                    <input 
+                      type="text" 
+                      required 
+                      value={inputAnswer} 
+                      onChange={e => setInputAnswer(e.target.value)} 
+                      placeholder="答えを入力して送信..." 
+                      className="flex-1 bg-amber-50/50 border border-amber-200 p-2.5 rounded-xl text-xs font-bold outline-none focus:border-amber-500" 
+                    />
+                    <button type="submit" className="bg-gradient-to-r from-amber-500 to-orange-500 text-white px-4 py-2.5 rounded-xl font-black text-xs shadow-md flex items-center gap-1">
+                      <Zap className="w-4 h-4"/> 攻撃！
+                    </button>
+                  </form>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-stone-400 font-bold text-xs bg-amber-50/50 rounded-2xl border border-amber-200">
+                  選択された出題範囲に当てはまる問題がありません
+                </div>
+              )}
+
+              <button onClick={handleCancel} className="w-full bg-stone-100 hover:bg-rose-100 text-stone-600 hover:text-rose-600 py-2 rounded-xl font-bold text-xs border border-stone-200 transition">
+                対戦を降参・終了する
+              </button>
+            </div>
+          )}
+
+          {battleState?.status === 'finished' && (
+            <div className="bg-amber-50 border-2 border-amber-400 p-6 rounded-2xl text-center space-y-3 shadow-lg">
+              <Trophy className="w-12 h-12 text-yellow-500 mx-auto animate-bounce" />
+              <h4 className="font-black text-lg text-stone-800">勝者: {battleState.winner}！</h4>
+              <p className="text-xs font-bold text-stone-600">お疲れ様でした！勝利者に150 XPが与えられます。</p>
+              <button onClick={handleCancel} className="bg-amber-500 text-white px-6 py-2.5 rounded-xl text-xs font-black shadow-md">
+                対戦画面を閉じる
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
   );
 }
