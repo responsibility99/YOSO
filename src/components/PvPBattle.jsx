@@ -52,6 +52,8 @@ export default function PvPBattle({ leaderboard, currentUid, questions, userProf
   const totalAtk = baseAtk + (equippedWeapon?.atkBonus || 0);
   const totalDef = equippedArmor?.defBonus || 0;
 
+  const inventory = Array.isArray(userProfile.inventory) ? userProfile.inventory : [];
+
   useEffect(() => {
     if (!userProfile.uid) return;
     const unsub = onSnapshot(doc(db, 'pvp_battles', userProfile.uid), (snapshot) => {
@@ -84,6 +86,7 @@ export default function PvPBattle({ leaderboard, currentUid, questions, userProf
     return () => clearInterval(timer);
   }, [battleState?.status, currentQIndex, activeQuestions.length]);
 
+  // 購入処理（所持リストに追加）
   const handleBuyItem = (item) => {
     if ((userProfile.xp || 0) < item.cost) {
       alert('XPが足りません！問題作成やチャットでXPを溜めよう。');
@@ -91,17 +94,35 @@ export default function PvPBattle({ leaderboard, currentUid, questions, userProf
     }
 
     const isWeapon = item.type === 'weapon';
-    const key = isWeapon ? 'weaponId' : 'armorId';
+    const equipKey = isWeapon ? 'weaponId' : 'armorId';
     const bonusKey = isWeapon ? 'atkBonus' : 'defBonus';
     const bonusValue = isWeapon ? item.atkBonus : item.defBonus;
 
-    setUserProfile(prev => ({
-      ...prev,
-      xp: prev.xp - item.cost,
-      [key]: item.id,
+    const newInventory = [...new Set([...inventory, item.id])];
+
+    setUserProfile({
+      ...userProfile,
+      xp: userProfile.xp - item.cost,
+      inventory: newInventory,
+      [equipKey]: item.id,
       [bonusKey]: bonusValue
-    }));
-    alert(`「${item.name}」を購入・装備しました！`);
+    });
+
+    alert(`「${item.name}」を購入し、装備しました！`);
+  };
+
+  // 既に持っている装備をつけ替える処理
+  const handleEquipItem = (item) => {
+    const isWeapon = item.type === 'weapon';
+    const equipKey = isWeapon ? 'weaponId' : 'armorId';
+    const bonusKey = isWeapon ? 'atkBonus' : 'defBonus';
+    const bonusValue = isWeapon ? item.atkBonus : item.defBonus;
+
+    setUserProfile({
+      ...userProfile,
+      [equipKey]: item.id,
+      [bonusKey]: bonusValue
+    });
   };
 
   const handleInvite = async (targetUser) => {
@@ -229,6 +250,8 @@ export default function PvPBattle({ leaderboard, currentUid, questions, userProf
             {SHOP_ITEMS.map(item => {
               const ItemIcon = item.icon;
               const isEquipped = (item.type === 'weapon' && userProfile.weaponId === item.id) || (item.type === 'armor' && userProfile.armorId === item.id);
+              const isOwned = inventory.includes(item.id);
+
               return (
                 <div key={item.id} className="bg-white p-3 rounded-2xl border border-amber-200 flex items-center justify-between shadow-sm">
                   <div className="flex items-center gap-2.5">
@@ -242,8 +265,16 @@ export default function PvPBattle({ leaderboard, currentUid, questions, userProf
                       </div>
                     </div>
                   </div>
+
                   {isEquipped ? (
                     <span className="bg-emerald-100 text-emerald-700 text-[10px] font-black px-2.5 py-1 rounded-lg">装備中</span>
+                  ) : isOwned ? (
+                    <button 
+                      onClick={() => handleEquipItem(item)} 
+                      className="bg-indigo-50 hover:bg-indigo-100 text-indigo-600 text-[10px] font-black px-3 py-1.5 rounded-xl border border-indigo-200 shadow-sm"
+                    >
+                      装備する
+                    </button>
                   ) : (
                     <button 
                       onClick={() => handleBuyItem(item)} 
